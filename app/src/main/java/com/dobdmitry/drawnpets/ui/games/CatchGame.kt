@@ -22,6 +22,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import com.dobdmitry.drawnpets.anim.Action
 import com.dobdmitry.drawnpets.anim.CreatureSprite
 import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.data.WornItem
 import com.dobdmitry.drawnpets.audio.Sounds
 import com.dobdmitry.drawnpets.ui.common.Palette
 import com.dobdmitry.drawnpets.ui.common.Particle
@@ -54,7 +55,7 @@ private val goodFood = listOf("🍎", "🍌", "🥕", "🍪", "🧀", "🍓", "�
 private const val CATCH_DURATION = 45f
 
 @Composable
-fun CatchGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Unit) {
+fun CatchGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) -> Unit) {
     val st = remember { CatchState() }
     var time by remember { mutableFloatStateOf(0f) }
     var score by remember { mutableIntStateOf(0) }
@@ -159,7 +160,7 @@ fun CatchGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Un
             }
             st.playerRect = drawCreature(
                 sprite = sprite, feet = Offset(st.px * size.width, size.height * 0.92f), height = h, time = t,
-                facingLeft = st.facingLeft, accessory = accessory,
+                facingLeft = st.facingLeft, outfit = outfit,
                 alpha = if (blink) 0.35f else 1f, action = act, actionTime = st.eatT.coerceAtLeast(0f),
             )
             // корзинка над головой — подсказка, куда ловить

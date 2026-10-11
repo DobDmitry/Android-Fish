@@ -59,6 +59,7 @@ private data class ShopEntry(
     val subtitle: String,
     val owned: Boolean,
     val isFood: Boolean,
+    val minLevel: Int = 1,
 )
 
 @Composable
@@ -81,8 +82,8 @@ fun ShopScreen(vm: GameViewModel, onBack: () -> Unit) {
             ShopEntry(it.id, it.emoji, it.name, it.price, "+${it.hunger} сытости • у тебя ${state.inventory[it.id] ?: 0}", false, true)
         }
     } else {
-        Catalog.accessories.map {
-            ShopEntry(it.id, it.emoji, it.name, it.price, "наряд для питомца", it.id in state.ownedAccessories, false)
+        Catalog.accessories.sortedWith(compareBy({ it.minLevel }, { it.slot.ordinal })).map {
+            ShopEntry(it.id, it.emoji, it.name, it.price, "${it.slot.title} • с ${it.minLevel}-го уровня", it.id in state.ownedAccessories, false, it.minLevel)
         }
     }
 
@@ -134,7 +135,8 @@ fun ShopScreen(vm: GameViewModel, onBack: () -> Unit) {
             modifier = Modifier.weight(1f),
         ) {
             items(entries, key = { it.id }) { e ->
-                val canBuy = !e.owned && state.coins >= e.price
+                val locked = e.minLevel > vm.maxLevel
+                val canBuy = !e.owned && !locked && state.coins >= e.price
                 Column(
                     Modifier
                         .clip(RoundedCornerShape(20.dp))
@@ -146,6 +148,7 @@ fun ShopScreen(vm: GameViewModel, onBack: () -> Unit) {
                             say = when {
                                 ok && e.isFood -> "Держи ${e.emoji}! Приятного аппетита!"
                                 ok -> "Отличный выбор! Надень ${e.emoji} питомцу в разделе «Наряд»."
+                                locked -> "Это для опытных! Нужен питомец ${e.minLevel}-го уровня."
                                 else -> "Не хватает монеток. Поиграй с Муркой — заработаешь!"
                             }
                             sayKey++
@@ -170,7 +173,11 @@ fun ShopScreen(vm: GameViewModel, onBack: () -> Unit) {
                             .padding(horizontal = 12.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            if (e.owned) "✅ Есть" else "🪙 ${e.price}",
+                            when {
+                                e.owned -> "✅ Есть"
+                                locked -> "🔒 ур. ${e.minLevel}"
+                                else -> "🪙 ${e.price}"
+                            },
                             fontWeight = FontWeight.Bold,
                             color = Palette.Ink,
                         )

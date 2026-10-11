@@ -24,6 +24,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import com.dobdmitry.drawnpets.anim.Action
 import com.dobdmitry.drawnpets.anim.CreatureSprite
 import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.data.WornItem
 import com.dobdmitry.drawnpets.audio.Sounds
 import com.dobdmitry.drawnpets.ui.common.Palette
 import com.dobdmitry.drawnpets.ui.common.Particle
@@ -85,7 +86,7 @@ private class HideState {
 }
 
 @Composable
-fun HideSeekGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Unit) {
+fun HideSeekGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) -> Unit) {
     val finish by rememberUpdatedState(onFinish)
     val st = remember { HideState() }
     var time by remember { mutableFloatStateOf(0f) }
@@ -179,7 +180,7 @@ fun HideSeekGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) ->
                 val y = start.y + (target.y - start.y) * k
                 drawCreature(
                     sprite, Offset(x * w, y * h), ch * (1f - 0.2f * k), t, moving = true,
-                    facingLeft = target.x < start.x, accessory = accessory, alpha = 1f - ((k - 0.75f) * 4f).coerceIn(0f, 1f),
+                    facingLeft = target.x < start.x, outfit = outfit, alpha = 1f - ((k - 0.75f) * 4f).coerceIn(0f, 1f),
                 )
             }
 
@@ -188,7 +189,7 @@ fun HideSeekGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) ->
                 val c = Offset(st.pos[i].x * w, st.pos[i].y * h)
                 if (i == hidden && (st.phase == HidePhase.FOUND || st.phase == HidePhase.MISSED)) {
                     val k = (st.timer / 0.4f).coerceIn(0f, 1f)
-                    drawCreature(sprite, Offset(c.x, c.y - r * 0.2f), ch, t, jump = ch * 0.55f * k, accessory = accessory, shadow = false, action = if (st.phase == HidePhase.FOUND) Action.HAPPY else Action.WAVE, actionTime = st.timer)
+                    drawCreature(sprite, Offset(c.x, c.y - r * 0.2f), ch, t, jump = ch * 0.55f * k, outfit = outfit, shadow = false, action = if (st.phase == HidePhase.FOUND) Action.HAPPY else Action.WAVE, actionTime = st.timer)
                 }
                 val rustle = st.phase == HidePhase.GUESS && i == hidden && st.round <= 2 && (t % 2.2f) < 0.35f
                 drawBush(c, r, if (rustle) sin(t * 40f) * 5f else 0f)
@@ -197,7 +198,7 @@ fun HideSeekGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) ->
                 }
             }
             if (st.phase == HidePhase.INTRO) {
-                drawCreature(sprite, Offset(start.x * w, start.y * h), ch, t, accessory = accessory, action = Action.WAVE, actionTime = st.timer)
+                drawCreature(sprite, Offset(start.x * w, start.y * h), ch, t, outfit = outfit, action = Action.WAVE, actionTime = st.timer)
                 drawLabel("Ищи меня!", Offset(start.x * w, start.y * h - ch - 20f), 46f, Palette.Coral)
             }
             if (st.phase == HidePhase.GUESS) {

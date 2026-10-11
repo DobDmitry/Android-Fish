@@ -79,11 +79,11 @@ fun PlayScreen(vm: GameViewModel, game: MiniGame, creatureId: String?, onExit: (
     ) {
         key(round) {
             when (game) {
-                MiniGame.CATCH -> CatchGame(sprite, creature?.accessory, finish)
-                MiniGame.JUMP -> JumpGame(sprite, creature?.accessory, finish)
+                MiniGame.CATCH -> CatchGame(sprite, creature?.outfit ?: emptyList(), finish)
+                MiniGame.JUMP -> JumpGame(sprite, creature?.outfit ?: emptyList(), finish)
                 MiniGame.MEMORY -> MemoryGame(vm, finish)
                 MiniGame.BALLOONS -> BalloonGame(vm, finish)
-                MiniGame.HIDE -> HideSeekGame(sprite, creature?.accessory, finish)
+                MiniGame.HIDE -> HideSeekGame(sprite, creature?.outfit ?: emptyList(), finish)
             }
         }
         Column(Modifier.statusBarsPadding()) {

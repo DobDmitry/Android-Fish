@@ -84,9 +84,8 @@ fun AlbumScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit,
                         val img = vm.bitmap(c.id)
                         if (img != null) Image(img, c.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                         else Text("🙂", fontSize = 60.sp)
-                        Catalog.accessory(c.accessory)?.let {
-                            Text(it.emoji, fontSize = 26.sp, modifier = Modifier.align(Alignment.TopEnd))
-                        }
+                        val worn = c.outfit.mapNotNull { Catalog.accessory(it.id)?.emoji }.joinToString("")
+                        if (worn.isNotEmpty()) Text(worn, fontSize = 20.sp, modifier = Modifier.align(Alignment.TopEnd))
                     }
                     Text(
                         "${c.name} ${c.moodEmoji}",

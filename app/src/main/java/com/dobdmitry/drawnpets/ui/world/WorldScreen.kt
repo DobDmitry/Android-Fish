@@ -243,7 +243,7 @@ fun WorldScreen(
                     w.rect = drawCreature(
                         sprite = vm.sprite(c.id), feet = feet, height = h, time = t,
                         seed = c.id.hashCode(), facingLeft = w.facingLeft, moving = w.moving,
-                        sleeping = c.sleeping, sad = c.mood < 30, accessory = c.accessory, jump = jump,
+                        sleeping = c.sleeping, sad = c.mood < 30, outfit = c.outfit, jump = jump,
                         action = if (c.sleeping) null else w.emote, actionTime = w.emoteT,
                     )
                     val labelColor = if (c.id == selectedId) Palette.Coral else Palette.Ink

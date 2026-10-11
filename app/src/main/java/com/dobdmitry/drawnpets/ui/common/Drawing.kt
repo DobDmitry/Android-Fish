@@ -19,7 +19,10 @@ import com.dobdmitry.drawnpets.anim.Action
 import com.dobdmitry.drawnpets.anim.Animator
 import com.dobdmitry.drawnpets.anim.CreatureSprite
 import com.dobdmitry.drawnpets.anim.EyeState
+import com.dobdmitry.drawnpets.anim.OutfitLayout
 import com.dobdmitry.drawnpets.data.Catalog
+import com.dobdmitry.drawnpets.data.Slot
+import com.dobdmitry.drawnpets.data.WornItem
 import kotlin.math.abs
 import kotlin.math.sin
 
@@ -98,7 +101,7 @@ fun DrawScope.drawCreature(
     moving: Boolean = false,
     sleeping: Boolean = false,
     sad: Boolean = false,
-    accessory: String? = null,
+    outfit: List<WornItem> = emptyList(),
     jump: Float = 0f,
     swimming: Boolean = false,
     shadow: Boolean = true,
@@ -169,6 +172,8 @@ fun DrawScope.drawCreature(
     canvas.translate(-bw / 2f, -bh.toFloat())
     meshPaint.alpha = (alpha.coerceIn(0f, 1f) * 255).toInt()
     meshPaint.colorFilter = if (act == Action.SLEEP || act == Action.SAD || sad) sadMatrixFilter else null
+    // Наряды «за спиной» рисуем до самого персонажа
+    drawOutfit(canvas, sprite, outfit, back = true, alpha = alpha)
     canvas.drawBitmapMesh(sprite.bitmap, Animator.GX, Animator.GY, sprite.verts, 0, null, 0, meshPaint)
 
     // Глаза: моргание, «счастливые» дуги, сон.
@@ -226,22 +231,45 @@ fun DrawScope.drawCreature(
         fillPaint.alpha = a255
         canvas.drawOval(tmpPoint[0] - mw * 0.25f, tmpPoint[1], tmpPoint[0] + mw * 0.25f, tmpPoint[1] + mh / 2, fillPaint)
     }
+    drawOutfit(canvas, sprite, outfit, back = false, alpha = alpha)
     canvas.restore()
 
-    // Шляпка на макушке (с учётом деформации)
-    Catalog.accessory(accessory)?.let { acc ->
-        anim.map(rig.headX, rig.headY, tmpPoint)
-        val hx = feet.x + (tmpPoint[0] - bw / 2f) * scale * flip
-        val hy = feet.y - lift - (bh - tmpPoint[1]) * scale * sy
-        val size = (w * 0.42f).coerceAtMost(height * 0.5f)
-        drawEmoji(acc.emoji, Offset(hx, hy - size * 0.25f), size, alpha, rot * flip)
-    }
     if (act == Action.SLEEP) {
         val k = (time * 0.7f + phase) % 1f
         drawEmoji("💤", Offset(feet.x + w * 0.35f + k * 20f, feet.y - height - k * 30f), height * 0.28f, 1f - k)
     }
     val top = feet.y - lift - (bh - rig.top) * scale
     return Rect(feet.x - w / 2, top, feet.x + w / 2, feet.y)
+}
+
+private val outfitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+
+/**
+ * Рисует наряды в системе координат картинки (холст уже повёрнут и отмасштабирован),
+ * поэтому они двигаются вместе с телом, а предметы в руке — вместе с рукой.
+ */
+private fun drawOutfit(canvas: android.graphics.Canvas, sprite: CreatureSprite, outfit: List<WornItem>, back: Boolean, alpha: Float) {
+    if (outfit.isEmpty()) return
+    val rig = sprite.rig
+    val anim = sprite.animator
+    for (item in outfit) {
+        val acc = Catalog.accessory(item.id) ?: continue
+        if ((acc.slot == Slot.BACK) != back) continue
+        val p = OutfitLayout.placement(item, rig) ?: continue
+        val li = OutfitLayout.limbFor(item, p, rig)
+        if (li >= 0) anim.mapOnLimb(li, p.x, p.y, tmpPoint) else anim.map(p.x, p.y, tmpPoint)
+        drawEmojiAt(canvas, acc.emoji, tmpPoint[0], tmpPoint[1], p.size, p.rot, alpha)
+    }
+}
+
+/** Эмодзи с центром в (x, y) на «сыром» Android-холсте. */
+fun drawEmojiAt(canvas: android.graphics.Canvas, text: String, x: Float, y: Float, size: Float, rot: Float, alpha: Float = 1f) {
+    outfitPaint.textSize = size
+    outfitPaint.alpha = (alpha.coerceIn(0f, 1f) * 255).toInt()
+    canvas.save()
+    canvas.rotate(rot, x, y)
+    canvas.drawText(text, x, y + size * 0.35f, outfitPaint)
+    canvas.restore()
 }
 
 /** Частица, которая улетает вверх и тает: сердечки, звёзды, «+1». */

@@ -21,7 +21,8 @@ data class Creature(
     val cleanliness: Float = 80f,
     val sleeping: Boolean = false,
     val xp: Int = 0,
-    val accessory: String? = null,
+    /** Надетые наряды — по одному на каждое место (голова, лицо, шея…). */
+    val outfit: List<WornItem> = emptyList(),
     val favoriteFood: String = "apple",
 ) {
     val level: Int get() = 1 + xp / LEVEL_XP
@@ -61,12 +62,39 @@ data class Food(
     val happiness: Int,
 )
 
+/** Куда надевается наряд. */
+enum class Slot(val title: String, val emoji: String) {
+    HEAD("Голова", "🎩"),
+    FACE("Лицо", "👓"),
+    NECK("Шея", "🧣"),
+    HAND("В руку", "🎈"),
+    BACK("Спина", "🎒"),
+}
+
+/** Наряд из каталога. Надеть его может только персонаж уровня [minLevel] и выше. */
 data class Accessory(
     val id: String,
     val emoji: String,
     val name: String,
     val price: Int,
+    val slot: Slot,
+    val minLevel: Int,
 )
+
+/**
+ * Надетый наряд. [x], [y] — центр в пикселях картинки персонажа, [size] — размер
+ * в тех же пикселях, [rot] — поворот в градусах. Если x/y/size не заданы,
+ * место выбирается автоматически по «скелету» рисунка.
+ */
+data class WornItem(
+    val id: String,
+    val x: Float? = null,
+    val y: Float? = null,
+    val size: Float? = null,
+    val rot: Float = 0f,
+) {
+    val custom: Boolean get() = x != null && y != null && size != null
+}
 
 object Catalog {
     val foods = listOf(
@@ -83,14 +111,43 @@ object Catalog {
     )
 
     val accessories = listOf(
-        Accessory("bow", "🎀", "Бантик", 30),
-        Accessory("cap", "🧢", "Кепка", 40),
-        Accessory("tophat", "🎩", "Цилиндр", 60),
-        Accessory("flower", "🌼", "Цветочек", 25),
-        Accessory("party", "🥳", "Праздник", 50),
-        Accessory("glasses", "🕶️", "Очки", 45),
-        Accessory("crown", "👑", "Корона", 120),
-        Accessory("helmet", "⛑️", "Каска", 55),
+        // Голова
+        Accessory("flower", "🌼", "Цветочек", 25, Slot.HEAD, 1),
+        Accessory("blossom", "🌸", "Сакура", 20, Slot.HEAD, 1),
+        Accessory("bow", "🎀", "Бантик", 30, Slot.HEAD, 1),
+        Accessory("cap", "🧢", "Кепка", 40, Slot.HEAD, 2),
+        Accessory("sunhat", "👒", "Шляпка", 45, Slot.HEAD, 2),
+        Accessory("tophat", "🎩", "Цилиндр", 60, Slot.HEAD, 3),
+        Accessory("helmet", "⛑️", "Каска", 55, Slot.HEAD, 3),
+        Accessory("mushroom", "🍄", "Грибная шляпа", 50, Slot.HEAD, 4),
+        Accessory("grad", "🎓", "Шапочка отличника", 80, Slot.HEAD, 5),
+        Accessory("crown", "👑", "Корона", 150, Slot.HEAD, 7),
+        Accessory("star", "🌟", "Звезда", 200, Slot.HEAD, 9),
+        // Лицо
+        Accessory("specs", "👓", "Очки", 35, Slot.FACE, 1),
+        Accessory("glasses", "🕶️", "Тёмные очки", 45, Slot.FACE, 2),
+        Accessory("mask", "🎭", "Маска", 65, Slot.FACE, 4),
+        // Шея
+        Accessory("bell", "🔔", "Колокольчик", 30, Slot.NECK, 1),
+        Accessory("scarf", "🧣", "Шарф", 40, Slot.NECK, 2),
+        Accessory("beads", "📿", "Бусы", 50, Slot.NECK, 3),
+        Accessory("tie", "👔", "Галстук", 55, Slot.NECK, 3),
+        Accessory("ribbon", "🎗️", "Ленточка", 60, Slot.NECK, 4),
+        Accessory("medal", "🏅", "Медаль", 100, Slot.NECK, 6),
+        // В руку
+        Accessory("balloon", "🎈", "Шарик", 30, Slot.HAND, 1),
+        Accessory("party", "🎉", "Хлопушка", 40, Slot.HAND, 2),
+        Accessory("sunflower", "🌻", "Подсолнух", 35, Slot.HAND, 2),
+        Accessory("lollipop", "🍭", "Леденец", 45, Slot.HAND, 3),
+        Accessory("ball", "⚽", "Мячик", 45, Slot.HAND, 3),
+        Accessory("umbrella", "☂️", "Зонтик", 60, Slot.HAND, 4),
+        Accessory("guitar", "🎸", "Гитара", 120, Slot.HAND, 6),
+        Accessory("crystal", "🔮", "Волшебный шар", 150, Slot.HAND, 7),
+        Accessory("trophy", "🏆", "Кубок", 250, Slot.HAND, 10),
+        // Спина
+        Accessory("backpack", "🎒", "Рюкзак", 45, Slot.BACK, 2),
+        Accessory("butterfly", "🦋", "Крылья бабочки", 90, Slot.BACK, 5),
+        Accessory("rainbow", "🌈", "Радуга", 180, Slot.BACK, 8),
     )
 
     fun food(id: String): Food? = foods.firstOrNull { it.id == id }

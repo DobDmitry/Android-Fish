@@ -11,7 +11,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dobdmitry.drawnpets.anim.CreatureSprite
 import com.dobdmitry.drawnpets.anim.ManualRig
+import com.dobdmitry.drawnpets.data.Accessory
 import com.dobdmitry.drawnpets.data.Catalog
+import com.dobdmitry.drawnpets.data.WornItem
 import com.dobdmitry.drawnpets.data.Creature
 import com.dobdmitry.drawnpets.data.DailyQuest
 import com.dobdmitry.drawnpets.data.GameState
@@ -31,6 +33,9 @@ import kotlin.math.min
 import kotlin.random.Random
 
 enum class FeedResult { OK, FAVORITE, FULL, NO_FOOD, SLEEPING }
+
+/** Персонаж вырос: новый уровень и наряды, которые теперь можно надеть. */
+data class LevelUp(val creatureId: String, val name: String, val level: Int, val unlocked: List<Accessory>)
 
 class GameViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -171,8 +176,23 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         return id
     }
 
+    /** Последнее повышение уровня — показываем праздничное окно. */
+    var levelUp by mutableStateOf<LevelUp?>(null)
+        private set
+
+    fun clearLevelUp() { levelUp = null }
+
+    /** Самый высокий уровень среди всех персонажей — от него зависит, что продаётся в лавке. */
+    val maxLevel: Int get() = state.creatures.maxOfOrNull { it.level } ?: 1
+
     private fun updateCreature(id: String, block: (Creature) -> Creature) {
+        val before = state.creature(id)?.level ?: return
         update { s -> s.copy(creatures = s.creatures.map { if (it.id == id) block(it) else it }) }
+        val c = state.creature(id) ?: return
+        if (c.level > before) {
+            val unlocked = Catalog.accessories.filter { it.minLevel in (before + 1)..c.level }
+            levelUp = LevelUp(id, c.name, c.level, unlocked)
+        }
     }
 
     private fun progressQuest(type: QuestType, amount: Int = 1) {
@@ -230,7 +250,14 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     fun moveTo(id: String, habitat: Habitat) = updateCreature(id) { it.copy(habitat = habitat) }
 
-    fun setAccessory(id: String, accessory: String?) = updateCreature(id) { it.copy(accessory = accessory) }
+    /** Надеть наряды (по одному на место; персонаж должен дорасти до нужного уровня). */
+    fun setOutfit(id: String, outfit: List<WornItem>) {
+        val c = state.creature(id) ?: return
+        val allowed = outfit
+            .filter { w -> Catalog.accessory(w.id)?.let { it.minLevel <= c.level && w.id in state.ownedAccessories } == true }
+            .distinctBy { Catalog.accessory(it.id)?.slot }
+        updateCreature(id) { it.copy(outfit = allowed) }
+    }
 
     fun release(id: String) {
         update { s -> s.copy(creatures = s.creatures.filterNot { it.id == id }) }
@@ -256,7 +283,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     fun buyAccessory(id: String): Boolean {
         val acc = Catalog.accessory(id) ?: return false
-        if (state.coins < acc.price || id in state.ownedAccessories) return false
+        if (state.coins < acc.price || id in state.ownedAccessories || acc.minLevel > maxLevel) return false
         update { s -> s.copy(coins = s.coins - acc.price, ownedAccessories = s.ownedAccessories + id) }
         return true
     }

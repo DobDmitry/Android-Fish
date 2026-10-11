@@ -70,7 +70,7 @@ import kotlin.math.PI
 import kotlin.math.hypot
 import kotlin.math.sin
 
-private enum class Mode { NONE, FEED, WASH, STYLE }
+private enum class Mode { NONE, FEED, WASH }
 
 /** Еда, летящая ко рту персонажа. */
 private class FlyingFood(val emoji: String, var t: Float = 0f)
@@ -87,6 +87,7 @@ fun CareScreen(
     onBack: () -> Unit,
     onPlay: (String) -> Unit,
     onRig: (String) -> Unit,
+    onOutfit: (String) -> Unit,
 ) {
     val creature = vm.state.creature(creatureId)
     // Персонажа отпустили — экран сейчас закрывается, рисовать нечего.
@@ -240,7 +241,7 @@ fun CareScreen(
                     }
                     creatureRect[0] = drawCreature(
                         sprite = sprite, feet = feet, height = h, time = t, seed = c.id.hashCode(),
-                        sleeping = c.sleeping, sad = c.mood < 30, accessory = c.accessory,
+                        sleeping = c.sleeping, sad = c.mood < 30, outfit = c.outfit,
                         swimming = c.habitat == Habitat.POND && !c.sleeping,
                         action = act, actionTime = emoteT[0],
                     )
@@ -343,30 +344,6 @@ fun CareScreen(
                         }
                     }
                 }
-                Mode.STYLE -> {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        StyleChip("🚫", c.accessory == null) { vm.setAccessory(creatureId, null) }
-                        val owned = Catalog.accessories.filter { it.id in vm.state.ownedAccessories }
-                        if (owned.isEmpty()) {
-                            Text("Наряды продаются в лавке у Енота 🦝", color = Palette.Ink, fontWeight = FontWeight.Bold)
-                        }
-                        owned.forEach { acc ->
-                            StyleChip(acc.emoji, c.accessory == acc.id) {
-                                vm.setAccessory(creatureId, acc.id)
-                                startEmote(Action.HAPPY)
-                                Sounds.play(Sfx.HAPPY)
-                                bubble = "Мне идёт ${acc.name.lowercase()}?"
-                            }
-                        }
-                    }
-                }
                 else -> Spacer(Modifier.height(8.dp))
             }
 
@@ -391,8 +368,8 @@ fun CareScreen(
                     mode = Mode.NONE
                 }
                 EmojiButton("🎮", "Играть", size = 52.dp) { onPlay(creatureId) }
-                EmojiButton("🎩", "Наряд", color = if (mode == Mode.STYLE) Palette.Lemon else Color.White, size = 52.dp) {
-                    mode = if (mode == Mode.STYLE) Mode.NONE else Mode.STYLE
+                EmojiButton("🎩", "Наряд", size = 52.dp) {
+                    onOutfit(creatureId)
                 }
             }
             Row(

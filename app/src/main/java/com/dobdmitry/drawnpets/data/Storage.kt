@@ -126,7 +126,17 @@ class Storage(context: Context) {
                     put("cleanliness", c.cleanliness.toDouble())
                     put("sleeping", c.sleeping)
                     put("xp", c.xp)
-                    put("accessory", c.accessory ?: "")
+                    put("outfit", JSONArray().apply {
+                        c.outfit.forEach { o ->
+                            put(JSONObject().apply {
+                                put("id", o.id)
+                                o.x?.let { put("x", it.toDouble()) }
+                                o.y?.let { put("y", it.toDouble()) }
+                                o.size?.let { put("size", it.toDouble()) }
+                                put("rot", o.rot.toDouble())
+                            })
+                        }
+                    })
                     put("favoriteFood", c.favoriteFood)
                 })
             }
@@ -147,6 +157,27 @@ class Storage(context: Context) {
         })
     }
 
+    private fun readOutfit(c: JSONObject): List<WornItem> {
+        val arr = c.optJSONArray("outfit")
+        if (arr == null) {
+            // старые сохранения: один наряд в поле accessory
+            val old = c.optString("accessory")
+            return if (old.isNotEmpty()) listOf(WornItem(old)) else emptyList()
+        }
+        val out = mutableListOf<WornItem>()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            out += WornItem(
+                id = o.getString("id"),
+                x = if (o.has("x")) o.getDouble("x").toFloat() else null,
+                y = if (o.has("y")) o.getDouble("y").toFloat() else null,
+                size = if (o.has("size")) o.getDouble("size").toFloat() else null,
+                rot = o.optDouble("rot", 0.0).toFloat(),
+            )
+        }
+        return out
+    }
+
     private fun fromJson(o: JSONObject): GameState {
         val creatures = mutableListOf<Creature>()
         o.optJSONArray("creatures")?.let { arr ->
@@ -163,7 +194,7 @@ class Storage(context: Context) {
                     cleanliness = c.optDouble("cleanliness", 80.0).toFloat(),
                     sleeping = c.optBoolean("sleeping"),
                     xp = c.optInt("xp"),
-                    accessory = c.optString("accessory").ifEmpty { null },
+                    outfit = readOutfit(c),
                     favoriteFood = c.optString("favoriteFood", "apple"),
                 )
             }

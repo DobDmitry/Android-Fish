@@ -257,7 +257,7 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
                 s.rect = drawCreature(
                     sprite = vm.sprite(c.id), feet = feet, height = h, time = t, seed = c.id.hashCode(),
                     facingLeft = s.facingLeft, swimming = true, sleeping = c.sleeping, sad = c.mood < 30,
-                    accessory = c.accessory, shadow = false,
+                    outfit = c.outfit, shadow = false,
                     action = if (s.happyT >= 0f && !c.sleeping) Action.HAPPY else null, actionTime = s.happyT,
                 )
                 drawLabel(c.name, Offset(s.x, feet.y + 30f), 30f, if (c.id == selectedId) Palette.Coral else Palette.Ink)

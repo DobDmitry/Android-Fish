@@ -191,7 +191,7 @@ fun AnimatedCreature(
             seed = seed,
             sleeping = creature?.sleeping == true,
             sad = (creature?.mood ?: 100f) < 30f,
-            accessory = creature?.accessory,
+            outfit = creature?.outfit ?: emptyList(),
             swimming = swimming,
         )
     }

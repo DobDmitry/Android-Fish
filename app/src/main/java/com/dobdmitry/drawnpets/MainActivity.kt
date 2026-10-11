@@ -10,7 +10,10 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
@@ -28,6 +31,7 @@ import com.dobdmitry.drawnpets.ui.games.MiniGame
 import com.dobdmitry.drawnpets.ui.games.PlayScreen
 import com.dobdmitry.drawnpets.ui.pond.PondScreen
 import com.dobdmitry.drawnpets.ui.rig.RigEditorScreen
+import com.dobdmitry.drawnpets.ui.outfit.OutfitScreen
 import com.dobdmitry.drawnpets.ui.shop.ShopScreen
 import com.dobdmitry.drawnpets.ui.world.WorldScreen
 
@@ -39,6 +43,7 @@ sealed interface Screen {
     data object Album : Screen
     data class Care(val id: String) : Screen
     data class RigEdit(val id: String) : Screen
+    data class Outfit(val id: String) : Screen
     data class Games(val creatureId: String?) : Screen
     data class Play(val game: MiniGame, val creatureId: String?) : Screen
 }
@@ -94,36 +99,57 @@ fun App(vm: GameViewModel) {
     }
     LaunchedEffect(track) { Sounds.music(track) }
 
-    AnimatedContent(
-        targetState = stack.last(),
-        transitionSpec = { fadeIn() togetherWith fadeOut() },
-        label = "screens",
-    ) { screen ->
-        when (screen) {
-            Screen.World -> WorldScreen(
-                vm = vm,
-                onCreate = { open(Screen.Create) },
-                onPond = { open(Screen.Pond) },
-                onGames = { open(Screen.Games(null)) },
-                onShop = { open(Screen.Shop) },
-                onAlbum = { open(Screen.Album) },
-                onCare = { open(Screen.Care(it)) },
-            )
-            Screen.Pond -> PondScreen(vm, onBack = ::pop, onCare = { open(Screen.Care(it)) })
-            Screen.Create -> CreateScreen(vm, onBack = ::pop) { id, habitat ->
-                Sounds.play(Sfx.MAGIC)
-                vm.state.creature(id)?.let { Voice.say("Ура! ${it.name} ожил!", pitch = 1.4f) }
-                pop()
-                if (habitat == Habitat.POND) open(Screen.Pond) else open(Screen.World)
+    Box(Modifier.fillMaxSize()) {
+        AnimatedContent(
+            targetState = stack.last(),
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "screens",
+        ) { screen ->
+            when (screen) {
+                Screen.World -> WorldScreen(
+                    vm = vm,
+                    onCreate = { open(Screen.Create) },
+                    onPond = { open(Screen.Pond) },
+                    onGames = { open(Screen.Games(null)) },
+                    onShop = { open(Screen.Shop) },
+                    onAlbum = { open(Screen.Album) },
+                    onCare = { open(Screen.Care(it)) },
+                )
+                Screen.Pond -> PondScreen(vm, onBack = ::pop, onCare = { open(Screen.Care(it)) })
+                Screen.Create -> CreateScreen(vm, onBack = ::pop) { id, habitat ->
+                    Sounds.play(Sfx.MAGIC)
+                    vm.state.creature(id)?.let { Voice.say("Ура! ${it.name} ожил!", pitch = 1.4f) }
+                    pop()
+                    if (habitat == Habitat.POND) open(Screen.Pond) else open(Screen.World)
+                }
+                Screen.Shop -> ShopScreen(vm, onBack = ::pop)
+                Screen.Album -> AlbumScreen(vm, onBack = ::pop, onCare = { open(Screen.Care(it)) }, onCreate = { open(Screen.Create) })
+                is Screen.Care -> CareScreen(vm, screen.id, onBack = ::pop, onPlay = { open(Screen.Games(it)) }, onRig = { open(Screen.RigEdit(it)) }, onOutfit = { open(Screen.Outfit(it)) })
+                is Screen.Outfit -> OutfitScreen(vm, screen.id, onBack = ::pop)
+                is Screen.RigEdit -> RigEditorScreen(vm, screen.id, onBack = ::pop)
+                is Screen.Games -> GamesMenuScreen(vm, screen.creatureId, onBack = ::pop) { game, id ->
+                    push(Screen.Play(game, id))
+                }
+                is Screen.Play -> PlayScreen(vm, screen.game, screen.creatureId, onExit = ::pop)
             }
-            Screen.Shop -> ShopScreen(vm, onBack = ::pop)
-            Screen.Album -> AlbumScreen(vm, onBack = ::pop, onCare = { open(Screen.Care(it)) }, onCreate = { open(Screen.Create) })
-            is Screen.Care -> CareScreen(vm, screen.id, onBack = ::pop, onPlay = { open(Screen.Games(it)) }, onRig = { open(Screen.RigEdit(it)) })
-            is Screen.RigEdit -> RigEditorScreen(vm, screen.id, onBack = ::pop)
-            is Screen.Games -> GamesMenuScreen(vm, screen.creatureId, onBack = ::pop) { game, id ->
-                push(Screen.Play(game, id))
-            }
-            is Screen.Play -> PlayScreen(vm, screen.game, screen.creatureId, onExit = ::pop)
         }
+        vm.levelUp?.let { lu -> LevelUpDialog(lu, onClose = vm::clearLevelUp) }
     }
+}
+
+/** Праздник: персонаж вырос, открылись новые наряды. */
+@Composable
+private fun LevelUpDialog(lu: LevelUp, onClose: () -> Unit) {
+    LaunchedEffect(lu) { Sounds.play(Sfx.WIN) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { androidx.compose.material3.Text("🎉 ${lu.name}: уровень ${lu.level}!") },
+        text = {
+            androidx.compose.material3.Text(
+                if (lu.unlocked.isEmpty()) "Твой друг растёт и становится сильнее!"
+                else "Теперь можно надеть: " + lu.unlocked.joinToString("  ") { "${it.emoji} ${it.name}" }
+            )
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onClose) { androidx.compose.material3.Text("Ура!") } },
+    )
 }

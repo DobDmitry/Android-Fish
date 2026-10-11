@@ -23,6 +23,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import com.dobdmitry.drawnpets.anim.Action
 import com.dobdmitry.drawnpets.anim.CreatureSprite
 import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.data.WornItem
 import com.dobdmitry.drawnpets.audio.Sounds
 import com.dobdmitry.drawnpets.ui.common.Palette
 import com.dobdmitry.drawnpets.ui.common.Particle
@@ -52,7 +53,7 @@ private class JumpState {
 }
 
 @Composable
-fun JumpGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Unit) {
+fun JumpGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) -> Unit) {
     val st = remember { JumpState() }
     var time by remember { mutableFloatStateOf(0f) }
     var score by remember { mutableIntStateOf(0) }
@@ -174,7 +175,7 @@ fun JumpGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Uni
             val blink = st.hurt > 0f && (t * 12f).toInt() % 2 == 0
             drawCreature(
                 sprite = sprite, feet = Offset(w * 0.22f, ground), height = w * 0.22f, time = t,
-                jump = st.lift, accessory = accessory, alpha = if (blink) 0.35f else 1f,
+                jump = st.lift, outfit = outfit, alpha = if (blink) 0.35f else 1f,
                 action = when {
                     st.hurt > 0.8f -> Action.SAD
                     st.lift > 0f -> Action.JUMP

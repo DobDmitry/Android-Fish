@@ -157,6 +157,18 @@ class Animator(val rig: Rig) {
     /** Деформация одной точки тела (глаза, рот, макушка). Результат — в out[0], out[1]. */
     fun map(x0: Float, y0: Float, out: FloatArray) = mapFrom(x0, y0, x0, y0, out)
 
+    /** Точка, прикреплённая к конечности [li] (например, предмет в руке). */
+    fun mapOnLimb(li: Int, x0: Float, y0: Float, out: FloatArray) {
+        val limb = rig.limbs.getOrNull(li) ?: return map(x0, y0, out)
+        val a = limbAngle[li]
+        val dx = x0 - limb.ax
+        val dy = y0 - limb.ay
+        val c = cos(a); val sn = sin(a)
+        val x = limb.ax + dx * c - dy * sn
+        val y = limb.ay + dx * sn + dy * c - limbLift[li] * limb.length
+        mapFrom(x0, y0, x, y, out)
+    }
+
     /** Деформация тела: (x0, y0) — исходная точка (для весов), (x, y) — уже сдвинутая конечностью. */
     private fun mapFrom(x0: Float, y0: Float, xs: Float, ys: Float, out: FloatArray) {
         var x = xs

@@ -275,7 +275,7 @@ fun RigEditorScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit) {
                     drawCreature(
                         sprite = ps, feet = Offset(size.width / 2, f.oy + bh * f.scale), height = bh * f.scale,
                         time = time, seed = 3, action = act, actionTime = time % 2.4f,
-                        accessory = creature.accessory, swimming = act == Action.SWIM,
+                        outfit = creature.outfit, swimming = act == Action.SWIM,
                     )
                     drawLabel(label, Offset(size.width / 2, 34.dp.toPx()), 20.dp.toPx(), Palette.Coral)
                     return@Canvas
