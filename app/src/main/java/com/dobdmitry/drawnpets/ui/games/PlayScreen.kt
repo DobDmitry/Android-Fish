@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -30,6 +31,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dobdmitry.drawnpets.GameViewModel
+import com.dobdmitry.drawnpets.anim.Action
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
+import com.dobdmitry.drawnpets.audio.Voice
+import com.dobdmitry.drawnpets.ui.npc.Npc
 import com.dobdmitry.drawnpets.ui.common.AnimatedCreature
 import com.dobdmitry.drawnpets.ui.common.Palette
 import com.dobdmitry.drawnpets.ui.common.Panel
@@ -42,7 +48,7 @@ private data class GameResult(val score: Int, val coins: Int, val record: Boolea
 @Composable
 fun PlayScreen(vm: GameViewModel, game: MiniGame, creatureId: String?, onExit: () -> Unit) {
     val creature = creatureId?.let { vm.state.creature(it) }
-    val image = creatureId?.let { vm.bitmap(it) }
+    val sprite = creatureId?.let { vm.sprite(it) }
     var round by remember { mutableIntStateOf(0) }
     var result by remember { mutableStateOf<GameResult?>(null) }
 
@@ -56,8 +62,15 @@ fun PlayScreen(vm: GameViewModel, game: MiniGame, creatureId: String?, onExit: (
             MiniGame.HIDE -> score * 3 + 1
         }
         val got = vm.finishGame(game.id, score, coins, creatureId)
-        result = GameResult(score, got, score > prevBest && score > 0)
+        val record = score > prevBest && score > 0
+        result = GameResult(score, got, record)
+        Sounds.play(Sfx.WIN)
+        Voice.say(
+            if (record) "Ура! Новый рекорд! Ты заработал монеток: $got!" else "Молодец! Ты заработал монеток: $got!",
+            pitch = Npc.CAT.voicePitch,
+        )
     }
+    LaunchedEffect(round) { Voice.say(game.voice, pitch = Npc.CAT.voicePitch) }
 
     Box(
         Modifier
@@ -66,11 +79,11 @@ fun PlayScreen(vm: GameViewModel, game: MiniGame, creatureId: String?, onExit: (
     ) {
         key(round) {
             when (game) {
-                MiniGame.CATCH -> CatchGame(image, creature?.accessory, finish)
-                MiniGame.JUMP -> JumpGame(image, creature?.accessory, finish)
+                MiniGame.CATCH -> CatchGame(sprite, creature?.accessory, finish)
+                MiniGame.JUMP -> JumpGame(sprite, creature?.accessory, finish)
                 MiniGame.MEMORY -> MemoryGame(vm, finish)
                 MiniGame.BALLOONS -> BalloonGame(vm, finish)
-                MiniGame.HIDE -> HideSeekGame(image, creature?.accessory, finish)
+                MiniGame.HIDE -> HideSeekGame(sprite, creature?.accessory, finish)
             }
         }
         Column(Modifier.statusBarsPadding()) {
@@ -93,7 +106,7 @@ fun PlayScreen(vm: GameViewModel, game: MiniGame, creatureId: String?, onExit: (
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(if (r.record) "🏆 Новый рекорд!" else "🎉 Игра окончена!", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Palette.Ink)
                         if (creature != null) {
-                            AnimatedCreature(creature, image, Modifier.size(130.dp), seed = 3)
+                            AnimatedCreature(creature, sprite, Modifier.size(130.dp), seed = 3, action = Action.HAPPY)
                         }
                         Text("Очки: ${r.score}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
                         Text("Монетки: +${r.coins} 🪙", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Palette.Coral)
@@ -105,7 +118,7 @@ fun PlayScreen(vm: GameViewModel, game: MiniGame, creatureId: String?, onExit: (
                         }
                         Spacer(Modifier.height(14.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            PillButton("🔄 Ещё раз") { result = null; round++ }
+                            PillButton("🔄 Ещё раз") { Sounds.play(Sfx.TAP); result = null; round++ }
                             PillButton("🏠 Выход", color = Palette.Mint, textColor = Palette.Ink, onClick = onExit)
                         }
                     }

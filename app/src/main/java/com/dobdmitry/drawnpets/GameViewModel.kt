@@ -7,9 +7,9 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.dobdmitry.drawnpets.anim.CreatureSprite
 import com.dobdmitry.drawnpets.data.Catalog
 import com.dobdmitry.drawnpets.data.Creature
 import com.dobdmitry.drawnpets.data.DailyQuest
@@ -38,15 +38,20 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     var state by mutableStateOf(storage.load())
         private set
 
-    private val bitmaps = mutableStateMapOf<String, ImageBitmap>()
+    private val sprites = mutableStateMapOf<String, CreatureSprite>()
     private var saveJob: Job? = null
 
     init {
         applyDecay(System.currentTimeMillis())
         ensureDailyQuests()
         if (!state.starterCreated) createStarters()
-        state.creatures.forEach { c ->
-            storage.loadImage(c.id)?.let { bitmaps[c.id] = it.asImageBitmap() }
+        viewModelScope.launch {
+            for (c in state.creatures) {
+                val sprite = withContext(Dispatchers.Default) {
+                    storage.loadImage(c.id)?.let { CreatureSprite.create(it) }
+                }
+                if (sprite != null) sprites[c.id] = sprite
+            }
         }
         viewModelScope.launch {
             while (true) {
@@ -58,7 +63,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun bitmap(id: String): ImageBitmap? = bitmaps[id]
+    fun bitmap(id: String): ImageBitmap? = sprites[id]?.image
+
+    /** Картинка со «скелетом» для анимации. */
+    fun sprite(id: String): CreatureSprite? = sprites[id]
 
     // ---------------------------------------------------------------- сохранение
 
@@ -138,7 +146,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun addCreature(bitmap: Bitmap, name: String, habitat: Habitat): String {
         val id = UUID.randomUUID().toString()
         storage.saveImage(id, bitmap)
-        bitmaps[id] = bitmap.asImageBitmap()
+        sprites[id] = CreatureSprite.create(bitmap)
         val creature = Creature(
             id = id,
             name = name.trim().ifEmpty { Catalog.randomNames.random() },
@@ -213,7 +221,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     fun release(id: String) {
         update { s -> s.copy(creatures = s.creatures.filterNot { it.id == id }) }
-        bitmaps.remove(id)
+        sprites.remove(id)
         storage.deleteImage(id)
     }
 

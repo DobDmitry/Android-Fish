@@ -18,8 +18,11 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import com.dobdmitry.drawnpets.anim.Action
+import com.dobdmitry.drawnpets.anim.CreatureSprite
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
 import com.dobdmitry.drawnpets.ui.common.Palette
 import com.dobdmitry.drawnpets.ui.common.Particle
 import com.dobdmitry.drawnpets.ui.common.burst
@@ -39,6 +42,7 @@ private class CatchState {
     var spawn = 0f
     var elapsed = 0f
     var hurt = 0f
+    var eatT = -1f
     var facingLeft = false
     var playerRect = Rect.Zero
     var size = Size.Zero
@@ -47,14 +51,14 @@ private class CatchState {
 }
 
 private val goodFood = listOf("🍎", "🍌", "🥕", "🍪", "🧀", "🍓", "🍐", "🥛")
-private const val CATCH_DURATION = 45f
+private const val CATCH_DURATION = 40f
 
 @Composable
-fun CatchGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Unit) {
+fun CatchGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Unit) {
     val st = remember { CatchState() }
     var time by remember { mutableFloatStateOf(0f) }
     var score by remember { mutableIntStateOf(0) }
-    var lives by remember { mutableIntStateOf(3) }
+    var lives by remember { mutableIntStateOf(5) }
     var secondsLeft by remember { mutableIntStateOf(CATCH_DURATION.toInt()) }
     val finish by rememberUpdatedState(onFinish)
 
@@ -75,21 +79,22 @@ fun CatchGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Unit) 
                 if (abs(dx) > 0.003f) st.facingLeft = dx < 0
                 st.px += dx * (dt * 10f).coerceAtMost(1f)
                 if (st.hurt > 0f) st.hurt -= dt
+                if (st.eatT >= 0f) { st.eatT += dt; if (st.eatT > 0.5f) st.eatT = -1f }
                 // появление предметов
                 st.spawn -= dt
-                val difficulty = 1f + st.elapsed / 25f
+                val difficulty = 1f + st.elapsed / 40f
                 if (st.spawn <= 0f) {
-                    st.spawn = (0.85f / difficulty).coerceAtLeast(0.32f)
+                    st.spawn = (1.0f / difficulty).coerceAtLeast(0.5f)
                     val r = Random.nextFloat()
                     val (emoji, pts) = when {
                         r < 0.07f -> "⭐" to 3
                         r < 0.15f -> "🍰" to 2
-                        r < 0.33f -> listOf("🪨", "🐝").random() to -1
+                        r < 0.30f -> listOf("🪨", "🐝").random() to -1
                         else -> goodFood.random() to 1
                     }
                     st.items += Falling(
                         x = sz.width * (0.08f + Random.nextFloat() * 0.84f), y = -40f, emoji = emoji, points = pts,
-                        speed = sz.height * (0.22f + Random.nextFloat() * 0.12f) * difficulty, spin = (Random.nextFloat() - 0.5f) * 200f,
+                        speed = sz.height * (0.17f + Random.nextFloat() * 0.1f) * difficulty, spin = (Random.nextFloat() - 0.5f) * 200f,
                     )
                 }
                 val pr = st.playerRect
@@ -105,10 +110,13 @@ fun CatchGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Unit) 
                             score += f.points
                             st.particles += Particle(f.x, f.y, "+${f.points}", 0f, -120f, 46f, isLabel = true, color = Palette.Coral)
                             st.particles.burst(f.x, f.y, "✨", 2, 30f)
+                            st.eatT = 0f
+                            Sounds.play(if (f.points > 1) Sfx.COIN else Sfx.EAT, volume = 0.8f)
                         } else if (st.hurt <= 0f) {
                             lives -= 1
                             st.hurt = 1.2f
                             st.particles.burst(f.x, f.y, "💥", 3, 40f)
+                            Sounds.play(Sfx.HURT)
                         }
                     } else if (f.y > sz.height + 60f) {
                         it.remove()
@@ -143,10 +151,16 @@ fun CatchGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Unit) 
             for (f in st.items) drawEmoji(f.emoji, Offset(f.x, f.y), size.width * 0.11f, rotation = t * f.spin)
             val h = size.width * 0.28f
             val blink = st.hurt > 0f && (t * 12f).toInt() % 2 == 0
+            val act = when {
+                st.hurt > 0.6f -> Action.SAD
+                st.eatT >= 0f -> Action.EAT
+                abs(st.target - st.px) > 0.01f -> Action.RUN
+                else -> Action.IDLE
+            }
             st.playerRect = drawCreature(
-                image = image, feet = Offset(st.px * size.width, size.height * 0.92f), height = h, time = t,
-                facingLeft = st.facingLeft, moving = abs(st.target - st.px) > 0.01f, accessory = accessory,
-                alpha = if (blink) 0.35f else 1f,
+                sprite = sprite, feet = Offset(st.px * size.width, size.height * 0.92f), height = h, time = t,
+                facingLeft = st.facingLeft, accessory = accessory,
+                alpha = if (blink) 0.35f else 1f, action = act, actionTime = st.eatT.coerceAtLeast(0f),
             )
             // корзинка над головой — подсказка, куда ловить
             drawEmoji("🧺", Offset(st.playerRect.center.x, st.playerRect.top + 6f + sin(t * 6f) * 2f), h * 0.32f)

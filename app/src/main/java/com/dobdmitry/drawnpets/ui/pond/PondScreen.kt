@@ -34,6 +34,10 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.dobdmitry.drawnpets.GameViewModel
+import com.dobdmitry.drawnpets.anim.Action
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
+import com.dobdmitry.drawnpets.audio.Voice
 import com.dobdmitry.drawnpets.data.Habitat
 import com.dobdmitry.drawnpets.ui.common.CreatureInfoCard
 import com.dobdmitry.drawnpets.ui.common.Palette
@@ -54,6 +58,8 @@ import kotlin.math.hypot
 import kotlin.math.sin
 import kotlin.random.Random
 
+private var frogSpoken = false
+
 private const val SURFACE = 0.24f
 private const val BOTTOM = 0.86f
 
@@ -66,6 +72,7 @@ private class Swimmer(var x: Float, var y: Float) {
     var rect = Rect.Zero
     var phase = Random.nextFloat() * 10f
     var targetPellet: Pellet? = null
+    var happyT = -1f
 }
 
 private class Pellet(var x: Float, var y: Float) {
@@ -159,6 +166,7 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
                                 pellets.remove(target)
                                 s.targetPellet = null
                                 particles.burst(s.x, s.y, "🫧", 2, 26f)
+                                if (Random.nextFloat() < 0.5f) Sounds.play(Sfx.BUBBLE, volume = 0.5f, rate = 0.8f + Random.nextFloat() * 0.5f)
                                 onEat()
                             } else randomTarget(s, sz)
                         } else {
@@ -170,8 +178,15 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
                     fish.forEach { swim(it) {} }
                     for (c in currentPond) {
                         val s = creatures[c.id] ?: continue
+                        if (s.happyT >= 0f) {
+                            s.happyT += dt
+                            if (s.happyT > 1.6f) s.happyT = -1f
+                        }
                         if (c.sleeping) continue
-                        swim(s) { vm.pondSnack(c.id) }
+                        swim(s) {
+                            vm.pondSnack(c.id)
+                            Sounds.play(Sfx.EAT, volume = 0.6f)
+                        }
                     }
                     crabX = (crabX + dt * 0.04f) % 1.2f
                 }
@@ -188,13 +203,18 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
                 .pointerInput(Unit) {
                     detectTapGestures { pos ->
                         if (frogRectRef[0].contains(pos)) {
+                            Sounds.play(Sfx.TAP)
                             showFrog = true
                             return@detectTapGestures
                         }
                         val hit = currentPond.firstOrNull { c -> creatures[c.id]?.rect?.inflate(16f)?.contains(pos) == true }
                         if (hit != null) {
                             selectedId = hit.id
-                            if (!hit.sleeping) vm.pet(hit.id)
+                            if (!hit.sleeping) {
+                                vm.pet(hit.id)
+                                creatures[hit.id]?.happyT = 0f
+                                Sounds.play(Sfx.HAPPY)
+                            }
                             particles.burst(pos.x, pos.y - 30f, "💖", 4, 36f)
                             return@detectTapGestures
                         }
@@ -203,6 +223,7 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
                                 pellets += Pellet(pos.x + (Random.nextFloat() - 0.5f) * 50f, pos.y + (Random.nextFloat() - 0.5f) * 20f)
                             }
                             particles.burst(pos.x, pos.y, "✨", 2, 24f)
+                            Sounds.play(Sfx.SPLASH, volume = 0.7f)
                             vm.fishFed()
                             hint = false
                         }
@@ -234,9 +255,10 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
                 val h = size.width * 0.24f
                 val feet = Offset(s.x, s.y + h / 2)
                 s.rect = drawCreature(
-                    image = vm.bitmap(c.id), feet = feet, height = h, time = t, seed = c.id.hashCode(),
+                    sprite = vm.sprite(c.id), feet = feet, height = h, time = t, seed = c.id.hashCode(),
                     facingLeft = s.facingLeft, swimming = true, sleeping = c.sleeping, sad = c.mood < 30,
                     accessory = c.accessory, shadow = false,
+                    action = if (s.happyT >= 0f && !c.sleeping) Action.HAPPY else null, actionTime = s.happyT,
                 )
                 drawLabel(c.name, Offset(s.x, feet.y + 30f), 30f, if (c.id == selectedId) Palette.Coral else Palette.Ink)
             }
@@ -263,6 +285,14 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
                     if (pond.isEmpty()) "🐸 Ква! Нажми на воду, чтобы покормить рыбок. А ещё можно поселить сюда рисунки!"
                     else "🐸 Нажми на воду — рыбки приплывут за кормом!"
                 )
+            }
+        }
+
+        LaunchedEffect(Unit) {
+            if (!frogSpoken) {
+                frogSpoken = true
+                kotlinx.coroutines.delay(600)
+                Voice.say("Ква! Нажми на воду, и рыбки приплывут за кормом!", pitch = Npc.FROG.voicePitch)
             }
         }
 

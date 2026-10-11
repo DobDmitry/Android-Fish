@@ -12,19 +12,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
+import com.dobdmitry.drawnpets.anim.Action
+import com.dobdmitry.drawnpets.anim.Animator
+import com.dobdmitry.drawnpets.anim.CreatureSprite
+import com.dobdmitry.drawnpets.anim.EyeState
 import com.dobdmitry.drawnpets.data.Catalog
 import kotlin.math.abs
-import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /** Время в секундах с момента появления composable, обновляется каждый кадр. */
@@ -72,14 +68,28 @@ fun DrawScope.drawLabel(text: String, center: Offset, size: Float, color: Color 
     canvas.drawText(text, center.x, center.y, labelPaint)
 }
 
-private val sadFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.35f) })
+private val sadMatrixFilter = android.graphics.ColorMatrixColorFilter(
+    android.graphics.ColorMatrix().apply { setSaturation(0.4f) }
+)
+private val meshPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+private val lidPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+private val inkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    style = Paint.Style.STROKE
+    strokeCap = Paint.Cap.ROUND
+    color = 0xFF3A2A55.toInt()
+}
+private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+private val tmpPoint = FloatArray(2)
+private val tmpRect = android.graphics.RectF()
 
 /**
- * Рисует оживший рисунок. [feet] — точка «ног» (низ по центру).
+ * Рисует оживший рисунок. [feet] — точка «ног» (низ по центру), [height] — высота картинки.
+ * Персонаж по-настоящему двигается: ноги шагают, руки машут, глаза моргают
+ * (см. [Animator]). Если [action] не задан, он выбирается по флагам.
  * Возвращает прямоугольник, который занял персонаж (для нажатий).
  */
 fun DrawScope.drawCreature(
-    image: ImageBitmap?,
+    sprite: CreatureSprite?,
     feet: Offset,
     height: Float,
     time: Float,
@@ -93,41 +103,41 @@ fun DrawScope.drawCreature(
     swimming: Boolean = false,
     shadow: Boolean = true,
     alpha: Float = 1f,
+    action: Action? = null,
+    actionTime: Float = 0f,
 ): Rect {
+    val act = action ?: when {
+        sleeping -> Action.SLEEP
+        swimming -> Action.SWIM
+        moving -> Action.WALK
+        sad -> Action.SAD
+        else -> Action.IDLE
+    }
     val phase = seed * 0.37f
-    val aspect = if (image != null) image.width.toFloat() / image.height else 1f
-    val w = height * aspect
+    val bw = sprite?.bitmap?.width ?: 1
+    val bh = sprite?.bitmap?.height ?: 1
+    val scale = height / bh
+    val w = bw * scale
 
-    var sx = 1f
-    var sy = 1f
     var rot = 0f
     var lift = jump
-    when {
-        sleeping -> {
-            val br = sin(time * 1.6f + phase)
-            sy = 0.94f + 0.03f * br
-            sx = 1.03f - 0.02f * br
+    var sy = 1f
+    when (act) {
+        Action.WALK -> {
+            lift += abs(sin(time * 8.5f + phase)) * height * 0.04f
+            rot = sin(time * 8.5f + phase) * 3f
         }
-        swimming -> {
-            rot = sin(time * 2.2f + phase) * 6f
-            sy = 1f + 0.03f * sin(time * 4f + phase)
+        Action.RUN -> {
+            lift += abs(sin(time * 13f + phase)) * height * 0.06f
+            rot = 6f + sin(time * 13f + phase) * 3f
         }
-        moving -> {
-            val hop = abs(sin(time * 7f + phase))
-            lift += hop * height * 0.10f
-            sy = 0.94f + 0.10f * hop
-            sx = 1.05f - 0.07f * hop
-            rot = sin(time * 7f + phase) * 5f
-        }
-        else -> {
-            val br = sin(time * 2.4f + phase)
-            sy = 1f + 0.035f * br
-            sx = 1f - 0.025f * br
-            rot = sin(time * 1.1f + phase) * 2f
-        }
+        Action.HAPPY -> lift += abs(sin(time * 7f)) * height * 0.1f
+        Action.JUMP -> sy = 1.06f
+        Action.SWIM -> rot = sin(time * 2.2f + phase) * 6f
+        else -> Unit
     }
 
-    if (shadow && !swimming) {
+    if (shadow && act != Action.SWIM) {
         val shadowScale = (1f - lift / (height * 1.2f)).coerceIn(0.4f, 1f)
         drawOval(
             color = Color.Black.copy(alpha = 0.16f * alpha * shadowScale),
@@ -136,35 +146,102 @@ fun DrawScope.drawCreature(
         )
     }
 
-    val base = Offset(feet.x, feet.y - lift)
-    withTransform({
-        rotate(rot, pivot = base)
-        scale(if (facingLeft) -sx else sx, sy, pivot = base)
-    }) {
-        if (image != null) {
-            drawImage(
-                image = image,
-                srcOffset = IntOffset.Zero,
-                srcSize = IntSize(image.width, image.height),
-                dstOffset = IntOffset((base.x - w / 2).roundToInt(), (base.y - height).roundToInt()),
-                dstSize = IntSize(w.roundToInt().coerceAtLeast(1), height.roundToInt().coerceAtLeast(1)),
-                alpha = alpha,
-                colorFilter = if (sad || sleeping) sadFilter else null,
-                filterQuality = FilterQuality.Medium,
-            )
-        } else {
-            drawEmoji("🙂", Offset(base.x, base.y - height / 2), height * 0.8f, alpha)
+    if (sprite == null) {
+        drawEmoji("🙂", Offset(feet.x, feet.y - lift - height / 2), height * 0.8f, alpha)
+        return Rect(feet.x - height / 2, feet.y - height, feet.x + height / 2, feet.y)
+    }
+
+    val anim = sprite.animator
+    anim.action = act
+    anim.t = time
+    anim.actionT = actionTime
+    anim.seed = seed
+    anim.update()
+    anim.fillMesh(sprite.verts)
+    val rig = sprite.rig
+    val flip = if (facingLeft) -1f else 1f
+
+    val canvas = drawContext.canvas.nativeCanvas
+    canvas.save()
+    canvas.translate(feet.x, feet.y - lift)
+    canvas.rotate(rot * flip)
+    canvas.scale(scale * flip, scale * sy)
+    canvas.translate(-bw / 2f, -bh.toFloat())
+    meshPaint.alpha = (alpha.coerceIn(0f, 1f) * 255).toInt()
+    meshPaint.colorFilter = if (act == Action.SLEEP || act == Action.SAD || sad) sadMatrixFilter else null
+    canvas.drawBitmapMesh(sprite.bitmap, Animator.GX, Animator.GY, sprite.verts, 0, null, 0, meshPaint)
+
+    // Глаза: моргание, «счастливые» дуги, сон.
+    val eyeState = anim.eyeState()
+    val a255 = (alpha.coerceIn(0f, 1f) * 255).toInt()
+    if (eyeState != EyeState.OPEN) {
+        for (e in rig.eyes) {
+            anim.map(e.cx, e.cy, tmpPoint)
+            val x = tmpPoint[0]
+            val y = tmpPoint[1]
+            lidPaint.color = e.lidColor
+            lidPaint.alpha = a255
+            canvas.drawOval(x - e.rx * 1.15f, y - e.ry * 1.15f, x + e.rx * 1.15f, y + e.ry * 1.15f, lidPaint)
+            inkPaint.strokeWidth = maxOf(3f, e.rx * 0.28f)
+            inkPaint.alpha = a255
+            if (eyeState == EyeState.HAPPY) {
+                tmpRect.set(x - e.rx, y - e.ry * 0.3f, x + e.rx, y + e.ry * 0.9f)
+                canvas.drawArc(tmpRect, 180f, 180f, false, inkPaint)
+            } else {
+                tmpRect.set(x - e.rx, y - e.ry * 0.9f, x + e.rx, y + e.ry * 0.3f)
+                canvas.drawArc(tmpRect, 0f, 180f, false, inkPaint)
+            }
         }
     }
+    // Румянец, когда весело
+    if ((act == Action.HAPPY || act == Action.WAVE) && rig.eyes.size >= 2) {
+        val mid = (rig.eyes.first().cx + rig.eyes.last().cx) / 2
+        fillPaint.color = 0xFFFF6F91.toInt()
+        fillPaint.alpha = (a255 * 0.45f).toInt()
+        for (e in rig.eyes) {
+            anim.map(e.cx + (e.cx - mid) * 0.35f, e.cy + e.ry * 1.7f, tmpPoint)
+            canvas.drawOval(tmpPoint[0] - e.rx * 0.8f, tmpPoint[1] - e.ry * 0.45f, tmpPoint[0] + e.rx * 0.8f, tmpPoint[1] + e.ry * 0.45f, fillPaint)
+        }
+    }
+    // Слёзка, когда грустно
+    if (act == Action.SAD && rig.eyes.isNotEmpty()) {
+        val e = rig.eyes.first()
+        val k = (time * 0.8f + phase) % 1f
+        anim.map(e.cx, e.cy + e.ry * (1.2f + k * 3f), tmpPoint)
+        fillPaint.color = 0xFF6EC4FF.toInt()
+        fillPaint.alpha = (a255 * (1f - k)).toInt()
+        canvas.drawCircle(tmpPoint[0], tmpPoint[1], maxOf(4f, e.rx * 0.4f), fillPaint)
+    }
+    // Рот открывается, когда персонаж ест или говорит
+    val open = anim.mouthOpen()
+    val mouth = anim.mouthPoint()
+    if (open > 0.05f && mouth != null) {
+        anim.map(mouth.first, mouth.second, tmpPoint)
+        val mw = anim.mouthWidth()
+        val mh = mw * 0.75f * open + 2f
+        fillPaint.color = 0xFF5A1430.toInt()
+        fillPaint.alpha = a255
+        canvas.drawOval(tmpPoint[0] - mw / 2, tmpPoint[1] - mh / 2, tmpPoint[0] + mw / 2, tmpPoint[1] + mh / 2, fillPaint)
+        fillPaint.color = 0xFFFF7A9A.toInt()
+        fillPaint.alpha = a255
+        canvas.drawOval(tmpPoint[0] - mw * 0.25f, tmpPoint[1], tmpPoint[0] + mw * 0.25f, tmpPoint[1] + mh / 2, fillPaint)
+    }
+    canvas.restore()
+
+    // Шляпка на макушке (с учётом деформации)
     Catalog.accessory(accessory)?.let { acc ->
-        val headY = base.y - height * sy
-        drawEmoji(acc.emoji, Offset(base.x, headY - height * 0.02f), (w * 0.42f).coerceAtMost(height * 0.5f), alpha, rot)
+        anim.map(rig.headX, rig.headY, tmpPoint)
+        val hx = feet.x + (tmpPoint[0] - bw / 2f) * scale * flip
+        val hy = feet.y - lift - (bh - tmpPoint[1]) * scale * sy
+        val size = (w * 0.42f).coerceAtMost(height * 0.5f)
+        drawEmoji(acc.emoji, Offset(hx, hy - size * 0.25f), size, alpha, rot * flip)
     }
-    if (sleeping) {
+    if (act == Action.SLEEP) {
         val k = (time * 0.7f + phase) % 1f
-        drawEmoji("💤", Offset(base.x + w * 0.35f + k * 20f, base.y - height - k * 30f), height * 0.28f, 1f - k)
+        drawEmoji("💤", Offset(feet.x + w * 0.35f + k * 20f, feet.y - height - k * 30f), height * 0.28f, 1f - k)
     }
-    return Rect(feet.x - w / 2, feet.y - height - lift, feet.x + w / 2, feet.y)
+    val top = feet.y - lift - (bh - rig.top) * scale
+    return Rect(feet.x - w / 2, top, feet.x + w / 2, feet.y)
 }
 
 /** Частица, которая улетает вверх и тает: сердечки, звёзды, «+1». */

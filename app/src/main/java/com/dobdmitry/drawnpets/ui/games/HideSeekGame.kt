@@ -18,10 +18,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import com.dobdmitry.drawnpets.anim.Action
+import com.dobdmitry.drawnpets.anim.CreatureSprite
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
 import com.dobdmitry.drawnpets.ui.common.Palette
 import com.dobdmitry.drawnpets.ui.common.Particle
 import com.dobdmitry.drawnpets.ui.common.burst
@@ -60,12 +63,12 @@ private class HideState {
     var size = Size.Zero
     val particles = mutableListOf<Particle>()
 
-    val swapDuration: Float get() = (0.75f - round * 0.04f).coerceAtLeast(0.32f)
+    val swapDuration: Float get() = (0.95f - round * 0.04f).coerceAtLeast(0.45f)
 
     fun nextRound() {
         round += 1
         hideBush = Random.nextInt(6)
-        swapsLeft = (round - 2).coerceIn(0, 8)
+        swapsLeft = (round - 2).coerceIn(0, 6)
         wrongBush = -1
         phase = HidePhase.INTRO
         timer = 0f
@@ -77,11 +80,12 @@ private class HideState {
         fromA = pos[swapA]
         fromB = pos[swapB]
         swapT = 0f
+        Sounds.play(Sfx.FLIP)
     }
 }
 
 @Composable
-fun HideSeekGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Unit) {
+fun HideSeekGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Unit) {
     val finish by rememberUpdatedState(onFinish)
     val st = remember { HideState() }
     var time by remember { mutableFloatStateOf(0f) }
@@ -144,12 +148,14 @@ fun HideSeekGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Uni
                         if (tapped == st.hideBush) {
                             st.phase = HidePhase.FOUND
                             found += 1
+                            Sounds.play(Sfx.HAPPY)
                             st.particles.burst(p.x, p.y - r, "💖", 6, 44f)
                         } else {
                             st.phase = HidePhase.MISSED
                             st.wrongBush = tapped
                             st.misses += 1
                             misses = st.misses
+                            Sounds.play(Sfx.WRONG)
                             st.particles.burst(p.x, p.y - r, "🍂", 4, 36f)
                         }
                     }
@@ -172,7 +178,7 @@ fun HideSeekGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Uni
                 val x = start.x + (target.x - start.x) * k
                 val y = start.y + (target.y - start.y) * k
                 drawCreature(
-                    image, Offset(x * w, y * h), ch * (1f - 0.2f * k), t, moving = true,
+                    sprite, Offset(x * w, y * h), ch * (1f - 0.2f * k), t, moving = true,
                     facingLeft = target.x < start.x, accessory = accessory, alpha = 1f - ((k - 0.75f) * 4f).coerceIn(0f, 1f),
                 )
             }
@@ -182,16 +188,16 @@ fun HideSeekGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Uni
                 val c = Offset(st.pos[i].x * w, st.pos[i].y * h)
                 if (i == hidden && (st.phase == HidePhase.FOUND || st.phase == HidePhase.MISSED)) {
                     val k = (st.timer / 0.4f).coerceIn(0f, 1f)
-                    drawCreature(image, Offset(c.x, c.y - r * 0.2f), ch, t, jump = ch * 0.55f * k, accessory = accessory, shadow = false)
+                    drawCreature(sprite, Offset(c.x, c.y - r * 0.2f), ch, t, jump = ch * 0.55f * k, accessory = accessory, shadow = false, action = if (st.phase == HidePhase.FOUND) Action.HAPPY else Action.WAVE, actionTime = st.timer)
                 }
-                val rustle = st.phase == HidePhase.GUESS && i == hidden && st.round <= 2 && (t % 2.2f) < 0.35f
+                val rustle = st.phase == HidePhase.GUESS && i == hidden && st.round <= 3 && (t % 2.2f) < 0.35f
                 drawBush(c, r, if (rustle) sin(t * 40f) * 5f else 0f)
                 if (i == st.wrongBush && st.phase == HidePhase.MISSED) {
                     drawLabel("Пусто!", Offset(c.x, c.y - r * 1.6f), 42f, Color(0xFF8A5A3B))
                 }
             }
             if (st.phase == HidePhase.INTRO) {
-                drawCreature(image, Offset(start.x * w, start.y * h), ch, t, accessory = accessory)
+                drawCreature(sprite, Offset(start.x * w, start.y * h), ch, t, accessory = accessory, action = Action.WAVE, actionTime = st.timer)
                 drawLabel("Ищи меня!", Offset(start.x * w, start.y * h - ch - 20f), 46f, Palette.Coral)
             }
             if (st.phase == HidePhase.GUESS) {

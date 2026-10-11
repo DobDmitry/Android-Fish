@@ -39,6 +39,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dobdmitry.drawnpets.GameViewModel
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
+import com.dobdmitry.drawnpets.audio.Voice
 import com.dobdmitry.drawnpets.data.Catalog
 import com.dobdmitry.drawnpets.ui.common.Palette
 import com.dobdmitry.drawnpets.ui.common.ScreenHeader
@@ -65,6 +68,7 @@ fun ShopScreen(vm: GameViewModel, onBack: () -> Unit) {
     var say by remember { mutableStateOf("Добро пожаловать в мою лавку! Что купим?") }
     var sayKey by remember { mutableIntStateOf(0) }
 
+    LaunchedEffect(say) { Voice.say(say, pitch = Npc.RACCOON.voicePitch) }
     LaunchedEffect(sayKey) {
         if (sayKey > 0) {
             delay(3000)
@@ -138,6 +142,7 @@ fun ShopScreen(vm: GameViewModel, onBack: () -> Unit) {
                         .border(2.dp, Palette.Ink.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
                         .clickable(enabled = !e.owned) {
                             val ok = if (e.isFood) vm.buyFood(e.id) else vm.buyAccessory(e.id)
+                            Sounds.play(if (ok) Sfx.COIN else Sfx.WRONG)
                             say = when {
                                 ok && e.isFood -> "Держи ${e.emoji}! Приятного аппетита!"
                                 ok -> "Отличный выбор! Надень ${e.emoji} питомцу в разделе «Наряд»."

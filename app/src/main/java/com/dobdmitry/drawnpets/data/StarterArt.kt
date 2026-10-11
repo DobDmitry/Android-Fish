@@ -50,7 +50,7 @@ object StarterArt {
 
     /** Рисует фигуру в стиле наклейки: белая обводка, заливка, карандашный контур. */
     private fun Canvas.sticker(path: Path, fill: Int, ink: Int = Color.rgb(58, 42, 85)) {
-        drawPath(path, strokePaint(26f, Color.WHITE))
+        drawPath(path, strokePaint(16f, Color.WHITE))
         drawPath(path, fillPaint(Color.WHITE))
         drawPath(path, fillPaint(fill))
         drawPath(path, strokePaint(7f, ink))

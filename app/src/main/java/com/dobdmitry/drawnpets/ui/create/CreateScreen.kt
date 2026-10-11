@@ -60,6 +60,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.dobdmitry.drawnpets.GameViewModel
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
+import com.dobdmitry.drawnpets.audio.Voice
+import com.dobdmitry.drawnpets.ui.npc.Npc
 import com.dobdmitry.drawnpets.data.Catalog
 import com.dobdmitry.drawnpets.data.Habitat
 import com.dobdmitry.drawnpets.image.DrawingExtractor
@@ -142,6 +146,12 @@ fun CreateScreen(vm: GameViewModel, onBack: () -> Unit, onCreated: (String, Habi
         }
     }
 
+    LaunchedEffect(Unit) {
+        Voice.say("Нарисуй персонажа на белом листе и сфотографируй его!", pitch = Npc.OWL.voicePitch)
+    }
+    LaunchedEffect(source) {
+        if (source != null) Voice.say("Как зовут твоего друга? И где он будет жить?", pitch = Npc.OWL.voicePitch)
+    }
     LaunchedEffect(source, sensitivity, rawMode) {
         val src = source ?: return@LaunchedEffect
         delay(180)
@@ -272,7 +282,11 @@ fun CreateScreen(vm: GameViewModel, onBack: () -> Unit, onCreated: (String, Habi
                                     .size(52.dp)
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(Palette.Lemon)
-                                    .clickable { name = Catalog.randomNames.random() },
+                                    .clickable {
+                                        Sounds.play(Sfx.BOING)
+                                        name = Catalog.randomNames.random()
+                                        Voice.say(name, pitch = 1.4f)
+                                    },
                                 contentAlignment = Alignment.Center,
                             ) { Text("🎲", fontSize = 26.sp) }
                         }
@@ -288,7 +302,7 @@ fun CreateScreen(vm: GameViewModel, onBack: () -> Unit, onCreated: (String, Habi
                                         .clip(RoundedCornerShape(16.dp))
                                         .background(if (sel) Palette.Mint else Color(0xFFF1EDE4))
                                         .border(2.dp, if (sel) Palette.Ink else Color.Transparent, RoundedCornerShape(16.dp))
-                                        .clickable { habitat = hb }
+                                        .clickable { Sounds.play(Sfx.TAP); habitat = hb }
                                         .padding(12.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {

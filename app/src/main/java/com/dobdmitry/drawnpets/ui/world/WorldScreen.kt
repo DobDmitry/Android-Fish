@@ -3,6 +3,7 @@ package com.dobdmitry.drawnpets.ui.world
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -44,6 +46,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dobdmitry.drawnpets.GameViewModel
+import com.dobdmitry.drawnpets.anim.Action
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
+import com.dobdmitry.drawnpets.audio.Voice
 import com.dobdmitry.drawnpets.data.Creature
 import com.dobdmitry.drawnpets.data.Habitat
 import com.dobdmitry.drawnpets.ui.common.CoinBadge
@@ -78,6 +84,38 @@ private class Walker(var x: Float, var y: Float) {
     var moving = false
     var jumpT = -1f
     var rect = Rect.Zero
+    /** Эмоция поверх ходьбы: радость после касания или приветствие. */
+    var emote: Action? = null
+    var emoteT = 0f
+}
+
+/** Чтобы подсказка Филина звучала один раз за запуск. */
+private var hintSpoken = false
+
+@Composable
+private fun SettingsDialog(onClose: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Настройки", fontWeight = FontWeight.ExtraBold) },
+        text = {
+            Column {
+                SettingRow("🎵", "Музыка", Sounds.musicOn) { Sounds.setMusic(it) }
+                SettingRow("🔔", "Звуки", Sounds.soundOn) { Sounds.setSound(it) }
+                SettingRow("🗣️", "Голос героев", Sounds.voiceOn) { Sounds.setVoice(it) }
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onClose) { Text("Готово") } },
+    )
+}
+
+@Composable
+private fun SettingRow(emoji: String, title: String, value: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(emoji, fontSize = 26.sp)
+        Spacer(Modifier.width(10.dp))
+        Text(title, fontSize = 18.sp, modifier = Modifier.weight(1f))
+        androidx.compose.material3.Switch(checked = value, onCheckedChange = onChange)
+    }
 }
 
 private class SceneItem(val y: Float, val draw: DrawScope.() -> Unit)
@@ -114,6 +152,7 @@ fun WorldScreen(
     var time by remember { mutableFloatStateOf(0f) }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var openNpc by remember { mutableStateOf<Npc?>(null) }
+    var showSettings by remember { mutableStateOf(false) }
     val flowers = remember {
         val r = Random(42)
         List(26) { Triple(r.nextFloat(), 0.56f + r.nextFloat() * 0.34f, r.nextInt(4)) }
@@ -153,14 +192,21 @@ fun WorldScreen(
                             .firstOrNull { it.second.rect.inflate(12f).contains(pos) }
                         if (hit != null) {
                             val (c, w) = hit
-                            w.jumpT = 0f
                             selectedId = c.id
-                            if (!c.sleeping) vm.pet(c.id)
+                            if (!c.sleeping) {
+                                vm.pet(c.id)
+                                w.emote = if (Random.nextBoolean()) Action.HAPPY else Action.WAVE
+                                w.emoteT = 0f
+                                Sounds.play(Sfx.HAPPY, rate = 0.9f + Random.nextFloat() * 0.3f)
+                            } else {
+                                Sounds.play(Sfx.TAP)
+                            }
                             particles.burst(pos.x, w.rect.top, if (c.sleeping) "💤" else "💖", 4, 40f)
                             return@detectTapGestures
                         }
                         val npc = npcRects.entries.firstOrNull { it.value.contains(pos) }?.key
                         if (npc != null) {
+                            Sounds.play(Sfx.TAP)
                             openNpc = npc
                             return@detectTapGestures
                         }
@@ -190,9 +236,10 @@ fun WorldScreen(
                     val jump = if (w.jumpT >= 0f) sin(PI.toFloat() * w.jumpT / 0.5f) * h * 0.45f else 0f
                     val feet = Offset(size.width * w.x, size.height * w.y)
                     w.rect = drawCreature(
-                        image = vm.bitmap(c.id), feet = feet, height = h, time = t,
+                        sprite = vm.sprite(c.id), feet = feet, height = h, time = t,
                         seed = c.id.hashCode(), facingLeft = w.facingLeft, moving = w.moving,
                         sleeping = c.sleeping, sad = c.mood < 30, accessory = c.accessory, jump = jump,
+                        action = if (c.sleeping) null else w.emote, actionTime = w.emoteT,
                     )
                     val labelColor = if (c.id == selectedId) Palette.Coral else Palette.Ink
                     drawLabel(c.name, Offset(feet.x, feet.y + 34f), 34f, labelColor)
@@ -219,9 +266,26 @@ fun WorldScreen(
                 modifier = Modifier.weight(1f),
             )
             CoinBadge(state.coins)
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier
+                    .size(42.dp)
+                    .background(Color.White, androidx.compose.foundation.shape.CircleShape)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .clickable { Sounds.play(Sfx.TAP); showSettings = true },
+                contentAlignment = Alignment.Center,
+            ) { Text("⚙️", fontSize = 22.sp) }
         }
 
-        if (state.creatures.size <= 2 && selectedId == null && openNpc == null) {
+        val showHint = state.creatures.size <= 2 && selectedId == null && openNpc == null
+        LaunchedEffect(showHint) {
+            if (showHint && !hintSpoken) {
+                hintSpoken = true
+                kotlinx.coroutines.delay(800)
+                Voice.say("Привет! Нарисуй персонажа на бумаге и нажми на кнопку с камерой. И он оживёт!", pitch = Npc.OWL.voicePitch)
+            }
+        }
+        if (showHint) {
             SpeechBubble(
                 "🦉 Нарисуй персонажа на бумаге и нажми «Рисунок» — он оживёт!",
                 Modifier
@@ -256,6 +320,8 @@ fun WorldScreen(
             }
         }
 
+        if (showSettings) SettingsDialog(onClose = { showSettings = false })
+
         openNpc?.let { npc ->
             NpcDialog(
                 npc = npc, vm = vm, onClose = { openNpc = null },
@@ -270,6 +336,11 @@ private fun updateWalker(w: Walker, c: Creature, dt: Float) {
         w.jumpT += dt
         if (w.jumpT > 0.5f) w.jumpT = -1f
     }
+    if (w.emote != null) {
+        w.emoteT += dt
+        if (w.emoteT > 1.8f) w.emote = null
+        else return
+    }
     if (c.sleeping) {
         w.moving = false
         return
@@ -277,6 +348,10 @@ private fun updateWalker(w: Walker, c: Creature, dt: Float) {
     if (w.wait > 0f) {
         w.wait -= dt
         w.moving = false
+        if (w.wait <= 0f && Random.nextFloat() < 0.2f && c.mood > 40f) {
+            // иногда машет рукой просто так
+            w.emote = Action.WAVE; w.emoteT = 0f
+        }
         if (w.wait <= 0f) {
             w.tx = 0.1f + Random.nextFloat() * 0.8f
             w.ty = MIN_Y + Random.nextFloat() * (MAX_Y - MIN_Y)

@@ -38,6 +38,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dobdmitry.drawnpets.GameViewModel
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
 import com.dobdmitry.drawnpets.ui.common.Palette
 import kotlinx.coroutines.delay
 
@@ -69,10 +71,12 @@ fun MemoryGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
         if (a != null && b != null) {
             delay(750)
             if (deck[a] == deck[b]) {
+                Sounds.play(Sfx.HAPPY)
                 matched[a] = true
                 matched[b] = true
                 pairsFound++
             } else {
+                Sounds.play(Sfx.WRONG, volume = 0.5f)
                 faceUp[a] = false
                 faceUp[b] = false
             }
@@ -111,6 +115,7 @@ fun MemoryGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
                         ) {
                             if (faceUp[i] || matched[i] || second != null) return@MemoryCard
                             faceUp[i] = true
+                            Sounds.play(Sfx.FLIP)
                             if (first == null) {
                                 first = i
                             } else {

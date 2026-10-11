@@ -19,8 +19,11 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import com.dobdmitry.drawnpets.anim.Action
+import com.dobdmitry.drawnpets.anim.CreatureSprite
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
 import com.dobdmitry.drawnpets.ui.common.Palette
 import com.dobdmitry.drawnpets.ui.common.Particle
 import com.dobdmitry.drawnpets.ui.common.burst
@@ -49,11 +52,11 @@ private class JumpState {
 }
 
 @Composable
-fun JumpGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Unit) {
+fun JumpGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Unit) {
     val st = remember { JumpState() }
     var time by remember { mutableFloatStateOf(0f) }
     var score by remember { mutableIntStateOf(0) }
-    var lives by remember { mutableIntStateOf(3) }
+    var lives by remember { mutableIntStateOf(5) }
     val finish by rememberUpdatedState(onFinish)
 
     LaunchedEffect(Unit) {
@@ -66,8 +69,8 @@ fun JumpGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Unit) {
                 time += dt
                 val sz = st.size
                 if (sz.width <= 0f) return@withFrameNanos
-                if (st.speed == 0f) st.speed = sz.width * 0.45f
-                st.speed += sz.width * 0.012f * dt
+                if (st.speed == 0f) st.speed = sz.width * 0.36f
+                st.speed += sz.width * 0.007f * dt
                 st.distance += st.speed * dt
                 // физика прыжка
                 val gravity = sz.height * 3.2f
@@ -79,7 +82,7 @@ fun JumpGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Unit) {
                 st.nextObstacle -= dt
                 if (st.nextObstacle <= 0f) {
                     st.obstacles += Obstacle(sz.width + 60f, listOf("🌵", "🪨", "🍄", "🌵").random())
-                    st.nextObstacle = (1.0f + Random.nextFloat() * 1.1f) * (sz.width * 0.45f / st.speed).coerceAtLeast(0.55f)
+                    st.nextObstacle = (1.3f + Random.nextFloat() * 1.2f) * (sz.width * 0.45f / st.speed).coerceAtLeast(0.7f)
                 }
                 st.nextCoin -= dt
                 if (st.nextCoin <= 0f) {
@@ -100,6 +103,7 @@ fun JumpGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Unit) {
                         lives -= 1
                         st.hurt = 1.3f
                         st.particles.burst(px, player.center.y, "💥", 3, 40f)
+                        Sounds.play(Sfx.HURT)
                     }
                     if (!o.passed && o.x < px - os) {
                         o.passed = true
@@ -114,6 +118,7 @@ fun JumpGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Unit) {
                     if (player.inflate(10f).contains(Offset(c.x, c.y))) {
                         ci.remove()
                         score += 2
+                        Sounds.play(Sfx.COIN, volume = 0.8f)
                         st.particles += Particle(c.x, c.y, "+2", 0f, -120f, 44f, isLabel = true, color = Palette.Coral)
                     } else if (c.x < -60f) ci.remove()
                 }
@@ -132,6 +137,7 @@ fun JumpGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Unit) {
                     detectTapGestures(onPress = {
                         if (st.jumpsLeft > 0) {
                             st.vy = size.height * (if (st.jumpsLeft == 2) 1.25f else 1.05f)
+                            Sounds.play(Sfx.JUMP, rate = if (st.jumpsLeft == 2) 1f else 1.25f)
                             st.jumpsLeft -= 1
                             st.particles.burst(size.width * 0.22f, size.height * 0.78f - st.lift, "💨", 1, 30f)
                         }
@@ -167,8 +173,13 @@ fun JumpGame(image: ImageBitmap?, accessory: String?, onFinish: (Int) -> Unit) {
             for (o in st.obstacles) drawEmoji(o.emoji, Offset(o.x, ground - w * 0.06f), w * 0.12f)
             val blink = st.hurt > 0f && (t * 12f).toInt() % 2 == 0
             drawCreature(
-                image = image, feet = Offset(w * 0.22f, ground), height = w * 0.22f, time = t,
-                moving = st.lift == 0f, jump = st.lift, accessory = accessory, alpha = if (blink) 0.35f else 1f,
+                sprite = sprite, feet = Offset(w * 0.22f, ground), height = w * 0.22f, time = t,
+                jump = st.lift, accessory = accessory, alpha = if (blink) 0.35f else 1f,
+                action = when {
+                    st.hurt > 0.8f -> Action.SAD
+                    st.lift > 0f -> Action.JUMP
+                    else -> Action.RUN
+                },
             )
             drawParticles(st.particles)
         }

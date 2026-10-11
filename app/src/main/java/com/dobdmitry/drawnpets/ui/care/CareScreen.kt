@@ -48,6 +48,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dobdmitry.drawnpets.FeedResult
 import com.dobdmitry.drawnpets.GameViewModel
+import com.dobdmitry.drawnpets.anim.Action
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
+import com.dobdmitry.drawnpets.audio.Voice
 import com.dobdmitry.drawnpets.data.Catalog
 import com.dobdmitry.drawnpets.data.Habitat
 import com.dobdmitry.drawnpets.ui.common.EmojiButton
@@ -82,7 +86,7 @@ fun CareScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit, onPlay
     // Персонажа отпустили — экран сейчас закрывается, рисовать нечего.
     if (creature == null) return
     val c by rememberUpdatedState(creature)
-    val image = vm.bitmap(creatureId)
+    val sprite = vm.sprite(creatureId)
 
     var mode by remember { mutableStateOf(Mode.NONE) }
     var bubble by remember { mutableStateOf<String?>(null) }
@@ -92,8 +96,13 @@ fun CareScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit, onPlay
     val flying = remember { mutableListOf<FlyingFood>() }
     val creatureRect = remember { arrayOf(Rect.Zero) }
     var time by remember { mutableFloatStateOf(0f) }
-    var jumpT by remember { mutableFloatStateOf(-1f) }
     var rubbed by remember { mutableFloatStateOf(0f) }
+    // Текущая эмоция поверх обычной позы и сколько она уже длится
+    val emote = remember { arrayOf<Action?>(null) }
+    val emoteT = remember { floatArrayOf(0f) }
+    val lastRub = remember { floatArrayOf(-10f) }
+    fun startEmote(a: Action) { emote[0] = a; emoteT[0] = 0f }
+    val voicePitch = 1.35f + (kotlin.math.abs(creatureId.hashCode()) % 5) * 0.1f
 
     LaunchedEffect(Unit) {
         var last = withFrameNanos { it }
@@ -112,22 +121,28 @@ fun CareScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit, onPlay
                         val r = creatureRect[0]
                         particles.burst(r.center.x, r.top + r.height * 0.4f, "💖", 5, 42f)
                         particles += Particle(r.center.x, r.top, "Ням!", 0f, -60f, 52f, isLabel = true, color = Palette.Coral)
-                        jumpT = 0f
+                        startEmote(Action.EAT)
+                        Sounds.play(Sfx.EAT)
                     }
                 }
-                if (jumpT >= 0f) {
-                    jumpT += dt
-                    if (jumpT > 0.5f) jumpT = -1f
+                emote[0]?.let { a ->
+                    emoteT[0] += dt
+                    if (emoteT[0] > (if (a == Action.EAT) 1.1f else 1.7f)) emote[0] = null
                 }
                 time = (now - start) / 1e9f
             }
         }
     }
     LaunchedEffect(bubble) {
-        if (bubble != null) {
+        val text = bubble
+        if (text != null) {
+            Voice.say(text, pitch = voicePitch)
             kotlinx.coroutines.delay(2500)
             bubble = null
         }
+    }
+    LaunchedEffect(Unit) {
+        creature.wish()?.let { Voice.say(it, pitch = voicePitch) }
     }
 
     val night = c.sleeping
@@ -164,12 +179,15 @@ fun CareScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit, onPlay
                                     val p = change.position
                                     if (creatureRect[0].inflate(30f).contains(p)) {
                                         rubbed += hypot(drag.x, drag.y)
+                                        lastRub[0] = time
                                         if (Math.random() < 0.35) particles.burst(p.x, p.y, "🫧", 1, 40f)
                                         if (rubbed > 260f) {
                                             rubbed = 0f
                                             vm.wash(creatureId, 8f)
+                                            Sounds.play(if (Math.random() < 0.5) Sfx.SQUEAK else Sfx.BUBBLE, volume = 0.7f)
                                             if (vm.state.creature(creatureId)?.cleanliness?.let { it >= 100f } == true) {
                                                 particles.burst(p.x, p.y, "✨", 6, 44f)
+                                                Sounds.play(Sfx.MAGIC)
                                                 bubble = "Я чистенький! Спасибо!"
                                             }
                                         }
@@ -182,7 +200,8 @@ fun CareScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit, onPlay
                                             bubble = "Тсс… я сплю…"
                                         } else {
                                             vm.pet(creatureId)
-                                            jumpT = 0f
+                                            startEmote(if (Math.random() < 0.5) Action.HAPPY else Action.WAVE)
+                                            Sounds.play(Sfx.HAPPY, rate = 0.9f + (Math.random() * 0.3).toFloat())
                                             particles.burst(p.x, p.y, "💖", 4, 44f)
                                             bubble = happyPhrases.random()
                                         }
@@ -206,11 +225,18 @@ fun CareScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit, onPlay
                     }
                     val h = minOf(size.height * 0.62f, size.width * 0.7f)
                     val feet = Offset(size.width / 2, size.height * 0.88f)
-                    val jump = if (jumpT >= 0f) sin(PI.toFloat() * jumpT / 0.5f) * h * 0.25f else 0f
+                    val act: Action? = when {
+                        c.sleeping -> null
+                        emote[0] != null -> emote[0]
+                        t - lastRub[0] < 0.4f -> Action.HAPPY
+                        Voice.speaking -> Action.TALK
+                        else -> null
+                    }
                     creatureRect[0] = drawCreature(
-                        image = image, feet = feet, height = h, time = t, seed = c.id.hashCode(),
-                        sleeping = c.sleeping, sad = c.mood < 30, accessory = c.accessory, jump = jump,
+                        sprite = sprite, feet = feet, height = h, time = t, seed = c.id.hashCode(),
+                        sleeping = c.sleeping, sad = c.mood < 30, accessory = c.accessory,
                         swimming = c.habitat == Habitat.POND && !c.sleeping,
+                        action = act, actionTime = emoteT[0],
                     )
                     // грязь
                     if (c.cleanliness < 60f && !c.sleeping) {
@@ -297,9 +323,9 @@ fun CareScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit, onPlay
                                         when (vm.feed(creatureId, food.id)) {
                                             FeedResult.OK -> { flying += FlyingFood(food.emoji); bubble = "Вкусно!" }
                                             FeedResult.FAVORITE -> { flying += FlyingFood(food.emoji); bubble = "Это моя любимая еда!!! 😍" }
-                                            FeedResult.FULL -> bubble = "Я уже наелся!"
+                                            FeedResult.FULL -> { bubble = "Я уже наелся!"; Sounds.play(Sfx.WRONG) }
                                             FeedResult.SLEEPING -> bubble = "Тсс… я сплю…"
-                                            FeedResult.NO_FOOD -> bubble = "Такой еды больше нет"
+                                            FeedResult.NO_FOOD -> { bubble = "Такой еды больше нет"; Sounds.play(Sfx.WRONG) }
                                         }
                                     }
                                     .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -328,6 +354,8 @@ fun CareScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit, onPlay
                         owned.forEach { acc ->
                             StyleChip(acc.emoji, c.accessory == acc.id) {
                                 vm.setAccessory(creatureId, acc.id)
+                                startEmote(Action.HAPPY)
+                                Sounds.play(Sfx.HAPPY)
                                 bubble = "Мне идёт ${acc.name.lowercase()}?"
                             }
                         }
@@ -351,6 +379,8 @@ fun CareScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit, onPlay
                     if (c.sleeping) bubble = "Сначала разбуди меня!"
                 }
                 EmojiButton(if (c.sleeping) "☀️" else "🌙", if (c.sleeping) "Разбудить" else "Спать", size = 52.dp) {
+                    Sounds.play(if (c.sleeping) Sfx.BOING else Sfx.YAWN)
+                    if (!c.sleeping) bubble = "Спокойной ночи!"
                     vm.toggleSleep(creatureId)
                     mode = Mode.NONE
                 }
@@ -369,6 +399,7 @@ fun CareScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit, onPlay
                 val other = if (c.habitat == Habitat.YARD) Habitat.POND else Habitat.YARD
                 SmallAction("${other.emoji} В ${if (other == Habitat.POND) "пруд" else "двор"}") {
                     vm.moveTo(creatureId, other)
+                    Sounds.play(if (other == Habitat.POND) Sfx.SPLASH else Sfx.BOING)
                     bubble = if (other == Habitat.POND) "Буль-буль! Я теперь плаваю!" else "Ура, я во дворе!"
                 }
                 SmallAction("👋 Отпустить") { showRelease = true }

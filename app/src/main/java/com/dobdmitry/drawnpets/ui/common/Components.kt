@@ -31,6 +31,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dobdmitry.drawnpets.anim.Action
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
+import com.dobdmitry.drawnpets.anim.CreatureSprite
 import com.dobdmitry.drawnpets.data.Creature
 
 @Composable
@@ -63,7 +67,7 @@ fun EmojiButton(
     Column(
         modifier
             .clip(RoundedCornerShape(16.dp))
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled) { Sounds.play(Sfx.TAP); onClick() }
             .padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -105,7 +109,7 @@ fun PillButton(
             .clip(RoundedCornerShape(50))
             .background(if (enabled) color else Color(0xFFCCCCCC))
             .border(2.5.dp, Palette.Ink.copy(alpha = if (enabled) 0.8f else 0.3f), RoundedCornerShape(50))
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled) { Sounds.play(Sfx.TAP); onClick() }
             .padding(horizontal = 20.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -156,7 +160,7 @@ fun ScreenHeader(title: String, coins: Int?, onBack: () -> Unit, modifier: Modif
                 .background(Color.White, CircleShape)
                 .border(2.dp, Palette.Ink.copy(alpha = 0.8f), CircleShape)
                 .clip(CircleShape)
-                .clickable(onClick = onBack),
+                .clickable { Sounds.play(Sfx.TAP); onBack() },
             contentAlignment = Alignment.Center,
         ) { Text("⬅️", fontSize = 20.sp) }
         Spacer(Modifier.width(10.dp))
@@ -169,15 +173,18 @@ fun ScreenHeader(title: String, coins: Int?, onBack: () -> Unit, modifier: Modif
 @Composable
 fun AnimatedCreature(
     creature: Creature?,
-    image: ImageBitmap?,
+    sprite: CreatureSprite?,
     modifier: Modifier = Modifier,
     seed: Int = 0,
     swimming: Boolean = false,
+    action: Action? = null,
 ) {
     val time by rememberFrameTime()
     Canvas(modifier) {
         drawCreature(
-            image = image,
+            sprite = sprite,
+            action = action,
+            actionTime = time,
             feet = Offset(size.width / 2, size.height * 0.95f),
             height = size.height * 0.8f,
             time = time,

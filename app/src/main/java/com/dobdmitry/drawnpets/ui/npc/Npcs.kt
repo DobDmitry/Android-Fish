@@ -13,12 +13,13 @@ import androidx.compose.ui.graphics.drawscope.translate
 import com.dobdmitry.drawnpets.ui.common.Palette
 import kotlin.math.sin
 
-enum class Npc(val title: String, val role: String, val emoji: String) {
-    OWL("Дедушка Филин", "Мудрый советчик", "🦉"),
-    RACCOON("Енот Тимофей", "Хозяин лавки", "🦝"),
-    HEDGEHOG("Доктор Ёжик", "Лечит питомцев", "🦔"),
-    CAT("Кошка Мурка", "Затейница игр", "🐱"),
-    FROG("Лягушка Квака", "Хозяйка пруда", "🐸"),
+/** [voicePitch] — высота голоса синтезатора речи для этого героя. */
+enum class Npc(val title: String, val role: String, val emoji: String, val voicePitch: Float) {
+    OWL("Дедушка Филин", "Мудрый советчик", "🦉", 0.75f),
+    RACCOON("Енот Тимофей", "Хозяин лавки", "🦝", 1.0f),
+    HEDGEHOG("Доктор Ёжик", "Лечит питомцев", "🦔", 1.2f),
+    CAT("Кошка Мурка", "Затейница игр", "🐱", 1.45f),
+    FROG("Лягушка Квака", "Хозяйка пруда", "🐸", 1.3f),
 }
 
 private val ink = Palette.Ink

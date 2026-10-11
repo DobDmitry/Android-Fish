@@ -11,8 +11,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
+import com.dobdmitry.drawnpets.audio.Track
+import com.dobdmitry.drawnpets.audio.Voice
 import com.dobdmitry.drawnpets.data.Habitat
 import com.dobdmitry.drawnpets.ui.album.AlbumScreen
 import com.dobdmitry.drawnpets.ui.care.CareScreen
@@ -42,6 +47,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        Sounds.init(this)
+        Voice.init(this)
         setContent {
             DrawnPetsTheme {
                 App(vm)
@@ -49,9 +56,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        Sounds.resume()
+    }
+
     override fun onStop() {
         super.onStop()
         vm.saveNow()
+        Sounds.pause()
+        Voice.stop()
     }
 }
 
@@ -70,6 +84,14 @@ fun App(vm: GameViewModel) {
 
     BackHandler(enabled = stack.size > 1) { pop() }
 
+    // Музыка зависит от экрана
+    val track = when (stack.last()) {
+        Screen.Pond -> Track.POND
+        is Screen.Games, is Screen.Play -> Track.GAMES
+        else -> Track.YARD
+    }
+    LaunchedEffect(track) { Sounds.music(track) }
+
     AnimatedContent(
         targetState = stack.last(),
         transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -86,7 +108,9 @@ fun App(vm: GameViewModel) {
                 onCare = { open(Screen.Care(it)) },
             )
             Screen.Pond -> PondScreen(vm, onBack = ::pop, onCare = { open(Screen.Care(it)) })
-            Screen.Create -> CreateScreen(vm, onBack = ::pop) { _, habitat ->
+            Screen.Create -> CreateScreen(vm, onBack = ::pop) { id, habitat ->
+                Sounds.play(Sfx.MAGIC)
+                vm.state.creature(id)?.let { Voice.say("Ура! ${it.name} ожил!", pitch = 1.4f) }
                 pop()
                 if (habitat == Habitat.POND) open(Screen.Pond) else open(Screen.World)
             }

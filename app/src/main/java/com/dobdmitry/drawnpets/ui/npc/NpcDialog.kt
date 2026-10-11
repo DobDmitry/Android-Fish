@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +38,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dobdmitry.drawnpets.GameViewModel
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
+import com.dobdmitry.drawnpets.audio.Voice
 import com.dobdmitry.drawnpets.data.Habitat
 import com.dobdmitry.drawnpets.ui.common.Palette
 import com.dobdmitry.drawnpets.ui.common.Panel
@@ -104,6 +109,9 @@ fun NpcDialog(
         }
     }
 
+    LaunchedEffect(phrase) { Voice.say(phrase, pitch = npc.voicePitch) }
+    DisposableEffect(Unit) { onDispose { Voice.stop() } }
+
     Box(
         Modifier
             .fillMaxSize()
@@ -170,6 +178,7 @@ fun NpcDialog(
                                     q.claimed -> Text("✅", fontSize = 22.sp)
                                     q.done -> PillButton("Забрать", color = Palette.Mint, textColor = Palette.Ink) {
                                         val got = vm.claimQuest(i)
+                                        Sounds.play(Sfx.WIN)
                                         notice = "Молодец! Держи $got монеток. Ух-ху!"
                                     }
                                     else -> Text("⏳", fontSize = 22.sp)
@@ -183,7 +192,10 @@ fun NpcDialog(
                                 enabled = vm.giftAvailable,
                                 color = Palette.Pink,
                             ) {
-                                vm.claimGift()?.let { (coins, emoji) -> notice = "С добрым днём! Вот тебе $coins монеток и $emoji." }
+                                vm.claimGift()?.let { (coins, emoji) ->
+                                    Sounds.play(Sfx.COIN)
+                                    notice = "С добрым днём! Вот тебе $coins монеток и $emoji."
+                                }
                             }
                             PillButton("💡 Совет", color = Palette.Lemon, textColor = Palette.Ink) {
                                 notice = null; phraseIndex++
@@ -199,6 +211,7 @@ fun NpcDialog(
                     Npc.HEDGEHOG -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         PillButton("💊 Вылечить всех", enabled = sick.isNotEmpty(), color = Palette.Mint, textColor = Palette.Ink) {
                             val n = vm.healAll()
+                            Sounds.play(Sfx.MAGIC)
                             notice = if (n > 0) "Готово! Вылечил: $n. Теперь все бодрые и сытые!" else "Все и так здоровы!"
                         }
                     }
@@ -229,6 +242,7 @@ fun NpcDialog(
                                             .background(Palette.SkyLight)
                                             .clickable {
                                                 vm.moveTo(c.id, Habitat.POND)
+                                                Sounds.play(Sfx.SPLASH)
                                                 notice = "Ква! ${c.name} теперь живёт в пруду!"
                                                 pickPond = false
                                             }

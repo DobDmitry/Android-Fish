@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dobdmitry.drawnpets.GameViewModel
+import com.dobdmitry.drawnpets.audio.Sfx
+import com.dobdmitry.drawnpets.audio.Sounds
+import com.dobdmitry.drawnpets.audio.Voice
 import com.dobdmitry.drawnpets.ui.common.Palette
 import com.dobdmitry.drawnpets.ui.common.ScreenHeader
 import com.dobdmitry.drawnpets.ui.common.SpeechBubble
@@ -44,12 +48,25 @@ import com.dobdmitry.drawnpets.ui.common.rememberFrameTime
 import com.dobdmitry.drawnpets.ui.npc.Npc
 import com.dobdmitry.drawnpets.ui.npc.drawNpc
 
-enum class MiniGame(val id: String, val title: String, val emoji: String, val description: String, val color: Color) {
-    CATCH("catch", "Ловим вкусняшки", "🍎", "Води питомца пальцем и лови еду. Камни и пчёлы — мимо!", Color(0xFFFFE3D1)),
-    JUMP("jump", "Прыг-скок", "🌵", "Нажимай на экран, чтобы перепрыгивать кактусы. Можно прыгнуть дважды!", Color(0xFFE2F6D5)),
-    MEMORY("memory", "Найди пару", "🃏", "Открывай карточки и ищи одинаковых персонажей.", Color(0xFFE5E1FF)),
-    BALLOONS("balloons", "Шарики", "🎈", "Лопай шарики, пока не улетели. Золотые — самые ценные, тучки не трогай!", Color(0xFFFFE0EC)),
-    HIDE("hide", "Прятки", "🌳", "Смотри внимательно, за какой куст спрятался питомец. Кусты умеют меняться местами!", Color(0xFFD8F5E6)),
+enum class MiniGame(
+    val id: String,
+    val title: String,
+    val emoji: String,
+    val description: String,
+    val color: Color,
+    /** Что Мурка говорит вслух перед игрой. */
+    val voice: String,
+) {
+    CATCH("catch", "Ловим вкусняшки", "🍎", "Води пальцем и лови еду. Камни и пчёл — не лови!", Color(0xFFFFE3D1),
+        "Лови вкусняшки! Води пальцем по экрану. Камни и пчёл не лови!"),
+    JUMP("jump", "Прыг-скок", "🌵", "Нажимай на экран и прыгай через кактусы!", Color(0xFFE2F6D5),
+        "Нажимай на экран, чтобы прыгать через кактусы! Можно прыгнуть два раза."),
+    MEMORY("memory", "Найди пару", "🃏", "Открывай карточки и ищи одинаковые.", Color(0xFFE5E1FF),
+        "Открывай карточки и ищи одинаковые картинки!"),
+    BALLOONS("balloons", "Шарики", "🎈", "Лопай шарики! Тучки не трогай.", Color(0xFFFFE0EC),
+        "Лопай шарики! Золотые — самые лучшие. А тучки не трогай!"),
+    HIDE("hide", "Прятки", "🌳", "Смотри, за какой куст спрятался друг!", Color(0xFFD8F5E6),
+        "Смотри внимательно, за какой куст я спрячусь!"),
 }
 
 @Composable
@@ -62,6 +79,12 @@ fun GamesMenuScreen(
     val state = vm.state
     var selected by remember { mutableStateOf(preselected ?: state.creatures.firstOrNull()?.id) }
     val player = selected?.let { state.creature(it) }
+    val catSays = when {
+        player == null -> "Мяу! Сначала оживи рисунок — играть веселее вместе!"
+        player.energy < 20 -> "${player.name} очень устал. Лучше уложи его спать!"
+        else -> "Мяу! Выбери друга и игру!"
+    }
+    LaunchedEffect(Unit) { Voice.say(catSays, pitch = Npc.CAT.voicePitch) }
 
     Column(
         Modifier
@@ -83,14 +106,7 @@ fun GamesMenuScreen(
                     drawNpc(Npc.CAT, Offset(size.width / 2, size.height * 0.98f), size.height * 0.9f, time)
                 }
                 Spacer(Modifier.width(8.dp))
-                SpeechBubble(
-                    when {
-                        player == null -> "Мяу! Сначала оживи рисунок — играть веселее вместе!"
-                        player.energy < 20 -> "${player.name} совсем без сил… Лучше уложи спать. Но если очень хочется — играй!"
-                        else -> "С кем играем? Выбери друга и игру!"
-                    },
-                    Modifier.weight(1f),
-                )
+                SpeechBubble(catSays, Modifier.weight(1f))
             }
             if (state.creatures.isNotEmpty()) {
                 Text("Кто играет:", fontWeight = FontWeight.Bold, color = Palette.Ink, modifier = Modifier.padding(top = 8.dp))
@@ -108,7 +124,7 @@ fun GamesMenuScreen(
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(if (sel) Palette.Lemon else Color.White)
                                 .border(2.dp, Palette.Ink.copy(alpha = if (sel) 0.9f else 0.3f), RoundedCornerShape(16.dp))
-                                .clickable { selected = c.id }
+                                .clickable { selected = c.id; Sounds.play(Sfx.TAP) }
                                 .padding(8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
@@ -128,7 +144,7 @@ fun GamesMenuScreen(
                         .clip(RoundedCornerShape(22.dp))
                         .background(g.color)
                         .border(2.5.dp, Palette.Ink.copy(alpha = 0.7f), RoundedCornerShape(22.dp))
-                        .clickable { onPlay(g, selected) }
+                        .clickable { Sounds.play(Sfx.TAP); onPlay(g, selected) }
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
