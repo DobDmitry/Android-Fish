@@ -377,7 +377,7 @@ private fun DrawScope.drawFish(c: Offset, len: Float, look: FishLook, facingLeft
         // спинной плавник
         val fin = Path().apply {
             moveTo(c.x - len * 0.15f, c.y - bodyH * 0.4f)
-            quadTo(c.x, c.y - bodyH * 0.95f, c.x + len * 0.15f, c.y - bodyH * 0.4f)
+            quadraticBezierTo(c.x, c.y - bodyH * 0.95f, c.x + len * 0.15f, c.y - bodyH * 0.4f)
             close()
         }
         drawPath(fin, look.fin)

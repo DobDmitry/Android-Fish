@@ -162,7 +162,7 @@ private fun DrawScope.drawBalloon(c: Offset, r: Float, b: Balloon, t: Float) {
     // ниточка
     val string = Path().apply {
         moveTo(c.x, c.y + r * 1.2f)
-        quadTo(c.x + sin(t * 3f + b.phase) * 10f, c.y + r * 1.8f, c.x, c.y + r * 2.5f)
+        quadraticBezierTo(c.x + sin(t * 3f + b.phase) * 10f, c.y + r * 1.8f, c.x, c.y + r * 2.5f)
     }
     drawPath(string, Palette.Ink.copy(alpha = 0.7f), style = Stroke(2.5f))
     val knot = Path().apply {
