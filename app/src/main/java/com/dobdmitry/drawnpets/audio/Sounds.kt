@@ -114,7 +114,7 @@ object Sounds {
     fun duck(on: Boolean) {
         ducked = on
         val v = if (on) MUSIC_VOLUME * 0.3f else MUSIC_VOLUME
-        try { player?.setVolume(v, v) } catch (_: IllegalStateException) {}
+        try { player?.setVolume(v, v) } catch (e: IllegalStateException) {}
     }
 
     private fun applyMusic() {
@@ -154,7 +154,7 @@ object Sounds {
 
     private fun stopPlayer() {
         player?.let {
-            try { it.stop() } catch (_: IllegalStateException) {}
+            try { it.stop() } catch (e: IllegalStateException) {}
             it.release()
         }
         player = null
