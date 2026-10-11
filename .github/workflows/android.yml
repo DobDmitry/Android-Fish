@@ -26,7 +26,9 @@ jobs:
             grep -E "^e: |error:|What went wrong" -A3 build.log | head -150
           fi
           exit $status
+      - name: Rename APK
+        run: mv app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/zhivye-risunki-1.0.${{ github.run_number }}.apk"
       - uses: actions/upload-artifact@v4
         with:
-          name: drawn-pets-debug-apk
+          name: zhivye-risunki-1.0.${{ github.run_number }}
           path: app/build/outputs/apk/debug/*.apk

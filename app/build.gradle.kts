@@ -12,8 +12,20 @@ android {
         applicationId = "com.dobdmitry.drawnpets"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        // Номер сборки GitHub Actions — чтобы каждая новая версия ставилась как обновление
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionName = "1.0.$versionCode"
+    }
+
+    signingConfigs {
+        // Постоянный ключ: иначе каждая сборка в CI подписывается новым случайным
+        // ключом, и Android не ставит новую версию поверх старой.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {

@@ -102,6 +102,11 @@ private fun SettingsDialog(onClose: () -> Unit) {
                 SettingRow("🎵", "Музыка", Sounds.musicOn) { Sounds.setMusic(it) }
                 SettingRow("🔔", "Звуки", Sounds.soundOn) { Sounds.setSound(it) }
                 SettingRow("🗣️", "Голос героев", Sounds.voiceOn) { Sounds.setVoice(it) }
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val version = remember {
+                    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?"
+                }
+                Text("Версия $version", fontSize = 13.sp, color = Palette.Ink.copy(alpha = 0.6f), modifier = Modifier.padding(top = 8.dp))
             }
         },
         confirmButton = { androidx.compose.material3.TextButton(onClick = onClose) { Text("Готово") } },
