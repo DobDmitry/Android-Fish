@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dobdmitry.drawnpets.anim.CreatureSprite
+import com.dobdmitry.drawnpets.anim.ManualRig
 import com.dobdmitry.drawnpets.data.Catalog
 import com.dobdmitry.drawnpets.data.Creature
 import com.dobdmitry.drawnpets.data.DailyQuest
@@ -48,7 +49,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             for (c in state.creatures) {
                 val sprite = withContext(Dispatchers.Default) {
-                    storage.loadImage(c.id)?.let { CreatureSprite.create(it) }
+                    storage.loadImage(c.id)?.let { CreatureSprite.create(it, storage.loadManualRig(c.id)) }
                 }
                 if (sprite != null) sprites[c.id] = sprite
             }
@@ -67,6 +68,18 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Картинка со «скелетом» для анимации. */
     fun sprite(id: String): CreatureSprite? = sprites[id]
+
+    /** Сохранить ручную разметку скелета (null — вернуть автоматическую) и пересобрать анимацию. */
+    fun setManualRig(id: String, rig: ManualRig?) {
+        val bitmap = sprites[id]?.bitmap ?: return
+        viewModelScope.launch {
+            val sprite = withContext(Dispatchers.Default) {
+                storage.saveManualRig(id, rig)
+                CreatureSprite.create(bitmap, rig)
+            }
+            sprites[id] = sprite
+        }
+    }
 
     // ---------------------------------------------------------------- сохранение
 

@@ -27,6 +27,15 @@ data class Limb(
 /** Глаз: центр, радиусы и цвет «века» (цвет кожи вокруг глаза). */
 data class Eye(val cx: Float, val cy: Float, val rx: Float, val ry: Float, val lidColor: Int)
 
+/** Конечность, отмеченная вручную: от точки крепления (ax, ay) до кончика (tx, ty). */
+data class ManualLimb(val kind: LimbKind, val ax: Float, val ay: Float, val tx: Float, val ty: Float)
+
+/** Глаз, отмеченный вручную. */
+data class ManualEye(val cx: Float, val cy: Float, val r: Float)
+
+/** Ручная разметка «скелета» — заменяет автоматическую, если автомат ошибся. */
+data class ManualRig(val limbs: List<ManualLimb>, val eyes: List<ManualEye>)
+
 /**
  * «Скелет» нарисованного персонажа, найденный автоматически по картинке.
  * Все координаты — в пикселях исходной картинки.
@@ -64,7 +73,11 @@ object RigAnalyzer {
 
     private const val INK_LUM = 95
 
-    fun analyze(px: IntArray, w: Int, h: Int): Rig {
+    /**
+     * Строит «скелет» рисунка. Если передана ручная разметка [manual],
+     * конечности и глаза берутся из неё, иначе ищутся автоматически.
+     */
+    fun analyze(px: IntArray, w: Int, h: Int, manual: ManualRig? = null): Rig {
         val n = w * h
         val solid = BooleanArray(n) { (px[it] ushr 24) > 140 }
         var top = h; var bottom = -1; var left = w; var right = -1
@@ -84,12 +97,23 @@ object RigAnalyzer {
         val bodyW = (right - left + 1).toFloat()
         val bodyH = (bottom - top + 1).toFloat()
 
-        val eyes = findEyes(px, inner, w, h, top, bodyH, bodyW, area)
         val limbMap = IntArray(n) { -1 }
-        val limbs = findLimbs(inner, limbMap, w, h, top, bodyW, bodyH, eyes)
+        val eyes: List<Eye>
+        val limbs: List<Limb>
+        if (manual == null) {
+            eyes = findEyes(px, inner, w, h, top, bodyH, bodyW, area)
+            limbs = findLimbs(inner, limbMap, w, h, top, bodyW, bodyH, eyes)
+        } else {
+            eyes = manual.eyes.map { e -> Eye(e.cx, e.cy, e.r, e.r, lidColor(px, inner, w, h, e.cx, e.cy, e.r)) }
+            // Автоматический поиск всё равно делаем: если ручная линия совпадает
+            // с найденной конечностью, берём её точную форму (например, волнистое щупальце).
+            val autoMap = IntArray(n) { -1 }
+            val auto = findLimbs(inner, autoMap, w, h, top, bodyW, bodyH, emptyList())
+            limbs = manualLimbs(manual.limbs, solid, inner, limbMap, w, h, outline, auto, autoMap)
+        }
         val legs = limbs.filter { it.kind == LimbKind.LEG }
         val hipY = legs.minOfOrNull { it.ay } ?: bottom.toFloat()
-        val (vLimb, vAlong) = assignVertices(inner, limbMap, limbs, w, h)
+        val (vLimb, vAlong) = assignVertices(if (manual == null) inner else solid, limbMap, limbs, w, h)
 
         // Макушка — для шляпок: верхняя точка в средней трети рисунка.
         var headY = top.toFloat()
@@ -506,10 +530,15 @@ object RigAnalyzer {
         val r = (if (reach.size >= 5) reach.sorted()[reach.size / 2] + 1.5f else pr + 2f).coerceAtMost(pr * 2.6f + 3f)
         val rx = max(r, b.bw / 2f + 2f)
         val ry = max(r, b.bh / 2f + 2f)
-        // Цвет «века» — средний светлый цвет вокруг глаза.
+        val lid = lidColor(px, inner, w, h, cx, cy, max(rx, ry))
+        return Eye(cx, cy, rx, ry, lid)
+    }
+
+    /** Цвет «века» — средний светлый цвет кольца вокруг глаза. */
+    private fun lidColor(px: IntArray, inner: BooleanArray, w: Int, h: Int, cx: Float, cy: Float, r: Float): Int {
         var sr = 0L; var sg = 0L; var sb = 0L; var cnt = 0
-        val ring0 = max(rx, ry) * 1.25f
-        val ring1 = max(rx, ry) * 1.6f + 2
+        val ring0 = r * 1.25f
+        val ring1 = r * 1.6f + 2
         val x0 = (cx - ring1).toInt().coerceAtLeast(0); val x1 = (cx + ring1).toInt().coerceAtMost(w - 1)
         val y0 = (cy - ring1).toInt().coerceAtLeast(0); val y1 = (cy + ring1).toInt().coerceAtMost(h - 1)
         for (y in y0..y1) for (x in x0..x1) {
@@ -521,9 +550,101 @@ object RigAnalyzer {
             if (lum(c) < INK_LUM + 30) continue
             sr += (c shr 16) and 0xFF; sg += (c shr 8) and 0xFF; sb += c and 0xFF; cnt++
         }
-        val lid = if (cnt > 0) {
+        return if (cnt > 0) {
             (0xFF shl 24) or ((sr / cnt).toInt() shl 16) or ((sg / cnt).toInt() shl 8) or (sb / cnt).toInt()
         } else 0xFFFFFFFF.toInt()
-        return Eye(cx, cy, rx, ry, lid)
     }
+
+    /**
+     * Ручные конечности: какие пиксели к ним относятся, определяем «капсулой»
+     * вокруг отрезка от крепления до кончика; толщину капсулы оцениваем по рисунку.
+     */
+    private fun manualLimbs(
+        list: List<ManualLimb>, solid: BooleanArray, inner: BooleanArray, limbMap: IntArray,
+        w: Int, h: Int, outline: Float, auto: List<Limb>, autoMap: IntArray,
+    ): List<Limb> {
+        val valid = list.filter { kotlin.math.hypot(it.tx - it.ax, it.ty - it.ay) >= 4f }
+        if (valid.isEmpty()) return emptyList()
+        val innerDist = distanceToEmpty(inner, w, h)
+        val bestD = FloatArray(w * h) { Float.MAX_VALUE }
+        var sx = 0L; var cnt = 0
+        for (i in solid.indices) if (solid[i]) { sx += i % w; cnt++ }
+        val bodyCx = if (cnt > 0) sx / cnt.toFloat() else w / 2f
+        // Сначала сортируем, чтобы порядок (для чередования шагов) шёл слева направо
+        val sorted = valid.sortedWith(compareBy({ it.kind.ordinal }, { it.ax }))
+        val orders = IntArray(LimbKind.entries.size)
+        val limbs = mutableListOf<Limb>()
+        for ((li, m) in sorted.withIndex()) {
+            val dx = m.tx - m.ax; val dy = m.ty - m.ay
+            val len2 = dx * dx + dy * dy
+            val len = sqrt(len2)
+            // Толщина конечности: медиана «полутолщины» вдоль отрезка
+            val samples = mutableListOf<Float>()
+            for (k in 3..9) {
+                val t = k / 10f
+                val px0 = (m.ax + dx * t).toInt(); val py0 = (m.ay + dy * t).toInt()
+                var best = 0f
+                for (oy in -6..6) for (ox in -6..6) {
+                    val x = px0 + ox; val y = py0 + oy
+                    if (x in 0 until w && y in 0 until h) best = max(best, innerDist[y * w + x])
+                }
+                samples += best
+            }
+            val half = samples.sorted()[samples.size / 2]
+            // Похожа на найденную автоматически конечность? Тогда берём её пиксели.
+            val match = auto.indices.minByOrNull { k ->
+                val a = auto[k]
+                kotlin.math.hypot(a.ax - m.ax, a.ay - m.ay) + kotlin.math.hypot(a.tx - m.tx, a.ty - m.ty)
+            }?.takeIf { k ->
+                val a = auto[k]
+                kotlin.math.hypot(a.ax - m.ax, a.ay - m.ay) + kotlin.math.hypot(a.tx - m.tx, a.ty - m.ty) < len * 0.35f
+            }
+            if (match != null) {
+                // пиксели конечности + её белая обводка вокруг
+                for (i in autoMap.indices) if (autoMap[i] == match) { limbMap[i] = li; bestD[i] = 0f }
+                val near = (outline + 2).toInt()
+                for (i in solid.indices) {
+                    if (!solid[i] || inner[i] || limbMap[i] >= 0) continue
+                    val x = i % w; val y = i / w
+                    var hit = false
+                    for (oy in -near..near) for (ox in -near..near) {
+                        val nx = x + ox; val ny = y + oy
+                        if (!hit && nx in 0 until w && ny in 0 until h && autoMap[ny * w + nx] == match) hit = true
+                    }
+                    if (hit) limbMap[i] = li
+                }
+            } else {
+            val radius = half + outline + 3f
+            val thick = half * 1.6f + 2f
+            val x0 = (min(m.ax, m.tx) - radius - 2).toInt().coerceAtLeast(0)
+            val x1 = (max(m.ax, m.tx) + radius + 2).toInt().coerceAtMost(w - 1)
+            val y0 = (min(m.ay, m.ty) - radius - 2).toInt().coerceAtLeast(0)
+            val y1 = (max(m.ay, m.ty) + radius + 2).toInt().coerceAtMost(h - 1)
+            for (y in y0..y1) for (x in x0..x1) {
+                val i = y * w + x
+                if (!solid[i]) continue
+                // Пиксели заметно толще конечности — это уже тело
+                if (innerDist[i] > thick) continue
+                val t = ((x - m.ax) * dx + (y - m.ay) * dy) / len2
+                if (t < 0f || t > 1f + radius / len) continue
+                val tc = t.coerceAtMost(1f)
+                val ex = x - (m.ax + dx * tc); val ey = y - (m.ay + dy * tc)
+                val d = sqrt(ex * ex + ey * ey)
+                if (d <= radius && d < bestD[i]) { bestD[i] = d; limbMap[i] = li }
+            }
+            }
+            val side = when {
+                abs(dx) > len * 0.2f -> if (dx < 0) -1 else 1
+                else -> if (m.ax < bodyCx) -1 else 1
+            }
+            limbs += Limb(m.kind, m.ax, m.ay, m.tx, m.ty, side, orders[m.kind.ordinal]++)
+        }
+        return limbs
+    }
+
+    /** Текущий «скелет» в виде ручной разметки — с него начинается редактирование. */
+    fun toManual(rig: Rig) = ManualRig(
+        limbs = rig.limbs.map { ManualLimb(it.kind, it.ax, it.ay, it.tx, it.ty) },
+        eyes = rig.eyes.map { ManualEye(it.cx, it.cy, max(it.rx, it.ry)) },
+    )
 }

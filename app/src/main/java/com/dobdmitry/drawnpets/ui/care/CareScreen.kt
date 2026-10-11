@@ -81,7 +81,13 @@ private val happyPhrases = listOf(
 )
 
 @Composable
-fun CareScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit, onPlay: (String) -> Unit) {
+fun CareScreen(
+    vm: GameViewModel,
+    creatureId: String,
+    onBack: () -> Unit,
+    onPlay: (String) -> Unit,
+    onRig: (String) -> Unit,
+) {
     val creature = vm.state.creature(creatureId)
     // Персонажа отпустили — экран сейчас закрывается, рисовать нечего.
     if (creature == null) return
@@ -392,10 +398,12 @@ fun CareScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit, onPlay
             Row(
                 Modifier
                     .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 12.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 SmallAction("✏️ Имя") { showRename = true }
+                SmallAction("🦴 Движения") { onRig(creatureId) }
                 val other = if (c.habitat == Habitat.YARD) Habitat.POND else Habitat.YARD
                 SmallAction("${other.emoji} В ${if (other == Habitat.POND) "пруд" else "двор"}") {
                     vm.moveTo(creatureId, other)

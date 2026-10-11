@@ -129,7 +129,9 @@ class Animator(val rig: Rig) {
                         Action.SWIM -> 0.6f * sin(t * 9f + off * 0.5f)
                     }
                     // Длинные руки и щупальца двигаем мягче, чтобы не «улетали»
-                    val soft = (bodyH * 0.45f / max(1f, limb.length)).coerceIn(0.35f, 1f)
+                    var soft = (bodyH * 0.45f / max(1f, limb.length)).coerceIn(0.35f, 1f)
+                    // Опущенная вдоль тела рука только покачивается — иначе тянет за собой бок
+                    if ((limb.ty - limb.ay) > limb.length * 0.7f) soft *= 0.35f
                     limbAngle[i] = (if (left) raise else -raise) * soft
                     limbLift[i] = 0f
                 }

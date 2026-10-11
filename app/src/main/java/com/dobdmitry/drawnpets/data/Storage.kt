@@ -3,6 +3,10 @@ package com.dobdmitry.drawnpets.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import com.dobdmitry.drawnpets.anim.LimbKind
+import com.dobdmitry.drawnpets.anim.ManualEye
+import com.dobdmitry.drawnpets.anim.ManualLimb
+import com.dobdmitry.drawnpets.anim.ManualRig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -25,6 +29,66 @@ class Storage(context: Context) {
 
     fun deleteImage(id: String) {
         imageFile(id).delete()
+        rigFile(id).delete()
+    }
+
+    private fun rigFile(id: String) = File(imagesDir, "rig_$id.json")
+
+    /** Ручная разметка рук, ног и глаз (null — автоматическая). */
+    fun loadManualRig(id: String): ManualRig? {
+        val f = rigFile(id)
+        if (!f.exists()) return null
+        return try {
+            val o = JSONObject(f.readText())
+            val limbs = mutableListOf<ManualLimb>()
+            o.optJSONArray("limbs")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    val l = arr.getJSONObject(i)
+                    val kind = runCatching { LimbKind.valueOf(l.getString("kind")) }.getOrNull() ?: continue
+                    limbs += ManualLimb(
+                        kind, l.getDouble("ax").toFloat(), l.getDouble("ay").toFloat(),
+                        l.getDouble("tx").toFloat(), l.getDouble("ty").toFloat(),
+                    )
+                }
+            }
+            val eyes = mutableListOf<ManualEye>()
+            o.optJSONArray("eyes")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    val e = arr.getJSONObject(i)
+                    eyes += ManualEye(e.getDouble("cx").toFloat(), e.getDouble("cy").toFloat(), e.getDouble("r").toFloat())
+                }
+            }
+            ManualRig(limbs, eyes)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun saveManualRig(id: String, rig: ManualRig?) {
+        val f = rigFile(id)
+        if (rig == null) {
+            f.delete()
+            return
+        }
+        val o = JSONObject().apply {
+            put("limbs", JSONArray().apply {
+                rig.limbs.forEach { l ->
+                    put(JSONObject().apply {
+                        put("kind", l.kind.name)
+                        put("ax", l.ax.toDouble()); put("ay", l.ay.toDouble())
+                        put("tx", l.tx.toDouble()); put("ty", l.ty.toDouble())
+                    })
+                }
+            })
+            put("eyes", JSONArray().apply {
+                rig.eyes.forEach { e ->
+                    put(JSONObject().apply {
+                        put("cx", e.cx.toDouble()); put("cy", e.cy.toDouble()); put("r", e.r.toDouble())
+                    })
+                }
+            })
+        }
+        f.writeText(o.toString())
     }
 
     @Synchronized

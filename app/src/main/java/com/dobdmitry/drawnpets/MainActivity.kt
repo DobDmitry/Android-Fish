@@ -27,6 +27,7 @@ import com.dobdmitry.drawnpets.ui.games.GamesMenuScreen
 import com.dobdmitry.drawnpets.ui.games.MiniGame
 import com.dobdmitry.drawnpets.ui.games.PlayScreen
 import com.dobdmitry.drawnpets.ui.pond.PondScreen
+import com.dobdmitry.drawnpets.ui.rig.RigEditorScreen
 import com.dobdmitry.drawnpets.ui.shop.ShopScreen
 import com.dobdmitry.drawnpets.ui.world.WorldScreen
 
@@ -37,6 +38,7 @@ sealed interface Screen {
     data object Shop : Screen
     data object Album : Screen
     data class Care(val id: String) : Screen
+    data class RigEdit(val id: String) : Screen
     data class Games(val creatureId: String?) : Screen
     data class Play(val game: MiniGame, val creatureId: String?) : Screen
 }
@@ -116,7 +118,8 @@ fun App(vm: GameViewModel) {
             }
             Screen.Shop -> ShopScreen(vm, onBack = ::pop)
             Screen.Album -> AlbumScreen(vm, onBack = ::pop, onCare = { open(Screen.Care(it)) }, onCreate = { open(Screen.Create) })
-            is Screen.Care -> CareScreen(vm, screen.id, onBack = ::pop, onPlay = { open(Screen.Games(it)) })
+            is Screen.Care -> CareScreen(vm, screen.id, onBack = ::pop, onPlay = { open(Screen.Games(it)) }, onRig = { open(Screen.RigEdit(it)) })
+            is Screen.RigEdit -> RigEditorScreen(vm, screen.id, onBack = ::pop)
             is Screen.Games -> GamesMenuScreen(vm, screen.creatureId, onBack = ::pop) { game, id ->
                 push(Screen.Play(game, id))
             }
