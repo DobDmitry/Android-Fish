@@ -34,6 +34,13 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.dobdmitry.drawnpets.GameViewModel
+import com.dobdmitry.drawnpets.R
+import com.dobdmitry.drawnpets.ui.common.LocationTabs
+import com.dobdmitry.drawnpets.ui.common.ScenePan
+import com.dobdmitry.drawnpets.ui.common.drawSceneBackground
+import com.dobdmitry.drawnpets.ui.common.scenePan
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.res.imageResource
 import com.dobdmitry.drawnpets.anim.Action
 import com.dobdmitry.drawnpets.audio.Sfx
 import com.dobdmitry.drawnpets.audio.Sounds
@@ -61,7 +68,7 @@ import kotlin.random.Random
 private var frogSpoken = false
 
 private const val SURFACE = 0.24f
-private const val BOTTOM = 0.86f
+private const val BOTTOM = 0.82f
 
 /** Пловец: и рыбки-NPC, и нарисованные персонажи. Координаты в пикселях. */
 private class Swimmer(var x: Float, var y: Float) {
@@ -92,7 +99,7 @@ private val fishLooks = listOf(
 )
 
 @Composable
-fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) {
+fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit, onLocation: (Habitat) -> Unit) {
     val state = vm.state
     val pond = state.creatures.filter { it.habitat == Habitat.POND }
     val currentPond by rememberUpdatedState(pond)
@@ -101,10 +108,12 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
     val creatures = remember { mutableMapOf<String, Swimmer>() }
     val pellets = remember { mutableListOf<Pellet>() }
     val particles = remember { mutableListOf<Particle>() }
-    val bubbles = remember { MutableList(14) { Offset(Random.nextFloat(), Random.nextFloat()) } }
+    val bubbles = remember { MutableList(30) { Offset(Random.nextFloat(), Random.nextFloat()) } }
     var crabX by remember { mutableFloatStateOf(0.3f) }
     var time by remember { mutableFloatStateOf(0f) }
     val canvasSizeRef = remember { arrayOf(Size.Zero) }
+    val pan = remember { ScenePan(0.4f) }
+    val background = ImageBitmap.imageResource(R.drawable.bg_pond)
     var selectedId by remember { mutableStateOf<String?>(null) }
     var showFrog by remember { mutableStateOf(false) }
     val frogRectRef = remember { arrayOf(Rect.Zero) }
@@ -122,6 +131,7 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
             withFrameNanos { now ->
                 val dt = ((now - last) / 1e9f).coerceAtMost(0.05f)
                 last = now
+                pan.step(dt)
                 val sz = canvasSizeRef[0]
                 if (sz.width > 0f) {
                     if (fish.isEmpty()) {
@@ -152,7 +162,7 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
                         if (tp != null && tp !in pellets) s.targetPellet = null
                         if (s.targetPellet == null && pellets.isNotEmpty()) {
                             val near = pellets.minByOrNull { hypot(it.x - s.x, it.y - s.y) }
-                            if (near != null && hypot(near.x - s.x, near.y - s.y) < sz.width * 0.6f) s.targetPellet = near
+                            if (near != null && hypot(near.x - s.x, near.y - s.y) < sz.height * 0.5f) s.targetPellet = near
                         }
                         val target = s.targetPellet
                         val gx = target?.x ?: s.tx
@@ -165,7 +175,7 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
                             if (target != null) {
                                 pellets.remove(target)
                                 s.targetPellet = null
-                                particles.burst(s.x, s.y, "🫧", 2, 26f)
+                                particles.burst(s.x - pan.offset, s.y, "🫧", 2, 26f)
                                 if (Random.nextFloat() < 0.5f) Sounds.play(Sfx.BUBBLE, volume = 0.5f, rate = 0.8f + Random.nextFloat() * 0.5f)
                                 onEat()
                             } else randomTarget(s, sz)
@@ -200,6 +210,7 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
         Canvas(
             Modifier
                 .fillMaxSize()
+                .scenePan(pan)
                 .pointerInput(Unit) {
                     detectTapGestures { pos ->
                         if (frogRectRef[0].contains(pos)) {
@@ -220,7 +231,7 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
                         }
                         if (pos.y > size.height * SURFACE) {
                             repeat(3) {
-                                pellets += Pellet(pos.x + (Random.nextFloat() - 0.5f) * 50f, pos.y + (Random.nextFloat() - 0.5f) * 20f)
+                                pellets += Pellet(pos.x + pan.offset + (Random.nextFloat() - 0.5f) * 50f, pos.y + (Random.nextFloat() - 0.5f) * 20f)
                             }
                             particles.burst(pos.x, pos.y, "✨", 2, 24f)
                             Sounds.play(Sfx.SPLASH, volume = 0.7f)
@@ -231,42 +242,45 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
                     }
                 }
         ) {
-            canvasSizeRef[0] = size
             val t = time
-            drawPondBackground(t, bubbles)
-            // Квака на кувшинке
-            val padCenter = Offset(size.width * 0.74f, size.height * SURFACE)
-            drawLilyPad(padCenter, size.width * 0.3f, t)
-            frogRectRef[0] = drawNpc(Npc.FROG, Offset(padCenter.x, padCenter.y + 6f), size.width * 0.2f, t)
-            drawLilyPad(Offset(size.width * 0.2f, size.height * SURFACE + 4f), size.width * 0.18f, t + 1f, flower = true)
+            drawSceneBackground(background, pan)
+            // Координаты рыб и жителей — в пикселях всего пруда (он шире экрана)
+            canvasSizeRef[0] = Size(pan.worldW, size.height)
+            val ox = pan.offset
+            drawBubbles(t, bubbles, pan)
+            // Квака на кувшинке с картинки
+            frogRectRef[0] = drawNpc(Npc.FROG, Offset(pan.sx(0.87f), size.height * 0.245f + sin(t * 1.5f) * 3f), size.height * 0.085f, t)
             // краб на дне
-            val cx = size.width * (crabX - 0.1f)
-            drawEmoji("🦀", Offset(cx, size.height * (BOTTOM + 0.04f) + sin(t * 10f) * 2f), size.width * 0.09f)
+            drawEmoji("🦀", Offset(pan.sx(crabX - 0.1f), size.height * (BOTTOM + 0.06f) + sin(t * 10f) * 2f), size.width * 0.09f)
             // корм
-            for (p in pellets) drawCircle(Color(0xFFC98B55), 7f, Offset(p.x, p.y))
+            for (p in pellets) drawCircle(Color(0xFFC98B55), 7f, Offset(p.x - ox, p.y))
             // рыбки
             fish.forEachIndexed { i, s ->
                 val look = fishLooks[i % fishLooks.size]
-                drawFish(Offset(s.x, s.y), size.width * look.length, look, s.facingLeft, t + s.phase)
+                drawFish(Offset(s.x - ox, s.y), size.width * look.length, look, s.facingLeft, t + s.phase)
             }
             // нарисованные жители
             for (c in currentPond) {
                 val s = creatures[c.id] ?: continue
                 val h = size.width * 0.24f
-                val feet = Offset(s.x, s.y + h / 2)
+                val feet = Offset(s.x - ox, s.y + h / 2)
                 s.rect = drawCreature(
                     sprite = vm.sprite(c.id), feet = feet, height = h, time = t, seed = c.id.hashCode(),
                     facingLeft = s.facingLeft, swimming = true, sleeping = c.sleeping, sad = c.mood < 30,
                     outfit = c.outfit, shadow = false,
                     action = if (s.happyT >= 0f && !c.sleeping) Action.HAPPY else null, actionTime = s.happyT,
                 )
-                drawLabel(c.name, Offset(s.x, feet.y + 30f), 30f, if (c.id == selectedId) Palette.Coral else Palette.Ink)
+                drawLabel(c.name, Offset(feet.x, feet.y + 30f), 30f, if (c.id == selectedId) Palette.Coral else Palette.Ink)
             }
             drawParticles(particles)
+            val a = 0.35f + 0.25f * sin(t * 3f)
+            if (pan.offset > 4f) drawEmoji("◀️", Offset(28f, size.height * 0.5f), 48f, a)
+            if (pan.offset < pan.worldW - pan.viewW - 4f) drawEmoji("▶️", Offset(size.width - 28f, size.height * 0.5f), 48f, a)
         }
 
         Column(Modifier.fillMaxWidth().statusBarsPadding()) {
             ScreenHeader("Пруд", state.coins, onBack)
+            LocationTabs(Habitat.POND, onSelect = onLocation)
         }
 
         Column(
@@ -305,86 +319,18 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit) 
     }
 }
 
-private fun DrawScope.drawPondBackground(t: Float, bubbles: MutableList<Offset>) {
-    val w = size.width
-    val h = size.height
-    val surface = h * SURFACE
-    drawRect(Brush.verticalGradient(listOf(Palette.Sky, Palette.SkyLight), 0f, surface), size = Size(w, surface))
-    // дальний берег
-    drawOval(Color(0xFF7BCB5C), Offset(-w * 0.2f, surface - h * 0.05f), Size(w * 0.8f, h * 0.1f))
-    drawOval(Color(0xFF8ED46A), Offset(w * 0.4f, surface - h * 0.04f), Size(w * 0.9f, h * 0.09f))
-    // вода
-    drawRect(
-        Brush.verticalGradient(listOf(Color(0xFF6CCBF5), Palette.Water, Palette.WaterDeep), surface, h * BOTTOM),
-        topLeft = Offset(0f, surface), size = Size(w, h - surface),
-    )
-    // лучи света
-    for (i in 0 until 4) {
-        val x = w * (0.1f + i * 0.27f) + sin(t * 0.5f + i) * 20f
-        val ray = Path().apply {
-            moveTo(x, surface); lineTo(x + w * 0.08f, surface)
-            lineTo(x + w * 0.2f, h * BOTTOM); lineTo(x + w * 0.05f, h * BOTTOM); close()
-        }
-        drawPath(ray, Color.White.copy(alpha = 0.07f))
-    }
-    // волна на поверхности
-    val wave = Path().apply {
-        moveTo(0f, surface)
-        var x = 0f
-        while (x <= w) {
-            lineTo(x, surface + sin(x / 40f + t * 2f) * 4f)
-            x += 10f
-        }
-    }
-    drawPath(wave, Color.White.copy(alpha = 0.8f), style = Stroke(4f))
-    // песок и камушки
-    val sand = Path().apply {
-        moveTo(0f, h * BOTTOM)
-        cubicTo(w * 0.3f, h * (BOTTOM - 0.03f), w * 0.6f, h * (BOTTOM + 0.03f), w, h * (BOTTOM - 0.01f))
-        lineTo(w, h); lineTo(0f, h); close()
-    }
-    drawPath(sand, Color(0xFFF1D9A0))
-    val rnd = Random(3)
-    repeat(12) {
-        drawOval(
-            listOf(Color(0xFFB0A090), Color(0xFF8D99A6), Color(0xFFD9C3A0))[it % 3],
-            Offset(rnd.nextFloat() * w, h * (BOTTOM + 0.03f + rnd.nextFloat() * 0.08f)),
-            Size(18f + rnd.nextFloat() * 22f, 10f + rnd.nextFloat() * 10f),
-        )
-    }
-    // водоросли
-    for (i in 0 until 7) {
-        val bx = w * (0.05f + i * 0.15f)
-        val hgt = h * (0.14f + (i % 3) * 0.05f)
-        val sway = sin(t * 1.3f + i) * 18f
-        val weed = Path().apply {
-            moveTo(bx, h * BOTTOM + 10f)
-            cubicTo(bx + sway, h * BOTTOM - hgt * 0.3f, bx - sway, h * BOTTOM - hgt * 0.7f, bx + sway * 1.3f, h * BOTTOM - hgt)
-        }
-        drawPath(weed, if (i % 2 == 0) Color(0xFF2E9E5B) else Color(0xFF45B86E), style = Stroke(14f, cap = StrokeCap.Round))
-    }
-    // пузырьки
+/** Пузырьки поднимаются со дна по всей ширине пруда. */
+private fun DrawScope.drawBubbles(t: Float, bubbles: List<Offset>, pan: ScenePan) {
+    val surface = size.height * SURFACE
+    val bottom = size.height * BOTTOM
     for (i in bubbles.indices) {
         val b = bubbles[i]
         val speed = 0.04f + (i % 4) * 0.015f
         val y = 1f - ((b.y + t * speed) % 1f)
-        val yy = surface + (h * BOTTOM - surface) * y
-        val xx = w * b.x + sin(t * 2f + i) * 8f
+        val yy = surface + (bottom - surface) * y
+        val xx = pan.sx(b.x) + sin(t * 2f + i) * 8f
         drawCircle(Color.White.copy(alpha = 0.5f), 5f + (i % 3) * 3f, Offset(xx, yy), style = Stroke(2.5f))
     }
-}
-
-private fun DrawScope.drawLilyPad(c: Offset, w: Float, t: Float, flower: Boolean = false) {
-    val bob = sin(t * 1.5f) * 3f
-    drawArc(
-        Color(0xFF3FA34D), 20f, 320f, true,
-        Offset(c.x - w / 2, c.y - w * 0.12f + bob), Size(w, w * 0.25f),
-    )
-    drawArc(
-        Palette.Ink, 20f, 320f, true,
-        Offset(c.x - w / 2, c.y - w * 0.12f + bob), Size(w, w * 0.25f), style = Stroke(3f),
-    )
-    if (flower) drawEmoji("🪷", Offset(c.x - w * 0.15f, c.y - w * 0.1f + bob), w * 0.35f)
 }
 
 private fun DrawScope.drawFish(c: Offset, len: Float, look: FishLook, facingLeft: Boolean, t: Float) {

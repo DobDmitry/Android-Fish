@@ -293,20 +293,22 @@ fun CreateScreen(vm: GameViewModel, onBack: () -> Unit, onCreated: (String, Habi
                         Spacer(Modifier.height(12.dp))
                         Text("Где он будет жить?", fontWeight = FontWeight.Bold, color = Palette.Ink)
                         Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Habitat.entries.forEach { hb ->
-                                val sel = hb == habitat
-                                Box(
-                                    Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(if (sel) Palette.Mint else Color(0xFFF1EDE4))
-                                        .border(2.dp, if (sel) Palette.Ink else Color.Transparent, RoundedCornerShape(16.dp))
-                                        .clickable { Sounds.play(Sfx.TAP); habitat = hb }
-                                        .padding(12.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text("${hb.emoji} ${hb.title}", fontWeight = FontWeight.Bold, color = Palette.Ink, fontSize = 17.sp)
+                        Habitat.entries.chunked(2).forEach { rowItems ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+                                rowItems.forEach { hb ->
+                                    val sel = hb == habitat
+                                    Box(
+                                        Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(if (sel) Palette.Mint else Color(0xFFF1EDE4))
+                                            .border(2.dp, if (sel) Palette.Ink else Color.Transparent, RoundedCornerShape(16.dp))
+                                            .clickable { Sounds.play(Sfx.TAP); habitat = hb }
+                                            .padding(12.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text("${hb.emoji} ${hb.title}", fontWeight = FontWeight.Bold, color = Palette.Ink, fontSize = 17.sp)
+                                    }
                                 }
                             }
                         }

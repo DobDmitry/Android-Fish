@@ -20,7 +20,7 @@ import java.io.File
  * ([Synth]) и сохраняются в кэш как WAV-файлы.
  */
 object Sounds {
-    private const val VERSION = 2
+    private const val VERSION = 3
     private const val MUSIC_VOLUME = 0.35f
 
     private var prefs: SharedPreferences? = null

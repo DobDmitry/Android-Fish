@@ -3,7 +3,9 @@ package com.dobdmitry.drawnpets.data
 /** Где живёт персонаж. */
 enum class Habitat(val title: String, val emoji: String) {
     YARD("Двор", "🏡"),
+    HOME("Дом", "🛋️"),
     POND("Пруд", "🐟"),
+    MARS("Марс", "🚀"),
 }
 
 data class Creature(

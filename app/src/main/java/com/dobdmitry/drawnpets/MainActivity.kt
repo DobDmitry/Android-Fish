@@ -95,6 +95,11 @@ fun App(vm: GameViewModel) {
     val track = when (stack.last()) {
         Screen.Pond -> Track.POND
         is Screen.Games, is Screen.Play -> Track.GAMES
+        Screen.World -> when (vm.location) {
+            Habitat.MARS -> Track.MARS
+            Habitat.HOME -> Track.POND
+            else -> Track.YARD
+        }
         else -> Track.YARD
     }
     LaunchedEffect(track) { Sounds.music(track) }
@@ -115,12 +120,18 @@ fun App(vm: GameViewModel) {
                     onAlbum = { open(Screen.Album) },
                     onCare = { open(Screen.Care(it)) },
                 )
-                Screen.Pond -> PondScreen(vm, onBack = ::pop, onCare = { open(Screen.Care(it)) })
+                Screen.Pond -> PondScreen(vm, onBack = ::pop, onCare = { open(Screen.Care(it)) }, onLocation = { h ->
+                    vm.location = h
+                    open(Screen.World)
+                })
                 Screen.Create -> CreateScreen(vm, onBack = ::pop) { id, habitat ->
                     Sounds.play(Sfx.MAGIC)
                     vm.state.creature(id)?.let { Voice.say("Ура! ${it.name} ожил!", pitch = 1.4f) }
                     pop()
-                    if (habitat == Habitat.POND) open(Screen.Pond) else open(Screen.World)
+                    if (habitat == Habitat.POND) open(Screen.Pond) else {
+                        vm.location = habitat
+                        open(Screen.World)
+                    }
                 }
                 Screen.Shop -> ShopScreen(vm, onBack = ::pop)
                 Screen.Album -> AlbumScreen(vm, onBack = ::pop, onCare = { open(Screen.Care(it)) }, onCreate = { open(Screen.Create) })

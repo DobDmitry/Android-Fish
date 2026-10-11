@@ -99,6 +99,7 @@ fun CareScreen(
     var bubble by remember { mutableStateOf<String?>(null) }
     var showRename by remember { mutableStateOf(false) }
     var showRelease by remember { mutableStateOf(false) }
+    var showMove by remember { mutableStateOf(false) }
     val particles = remember { mutableListOf<Particle>() }
     val flying = remember { mutableListOf<FlyingFood>() }
     val creatureRect = remember { arrayOf(Rect.Zero) }
@@ -381,12 +382,7 @@ fun CareScreen(
             ) {
                 SmallAction("✏️ Имя") { showRename = true }
                 SmallAction("🦴 Движения") { onRig(creatureId) }
-                val other = if (c.habitat == Habitat.YARD) Habitat.POND else Habitat.YARD
-                SmallAction("${other.emoji} В ${if (other == Habitat.POND) "пруд" else "двор"}") {
-                    vm.moveTo(creatureId, other)
-                    Sounds.play(if (other == Habitat.POND) Sfx.SPLASH else Sfx.BOING)
-                    bubble = if (other == Habitat.POND) "Буль-буль! Я теперь плаваю!" else "Ура, я во дворе!"
-                }
+                SmallAction("${c.habitat.emoji} Переселить") { showMove = true }
                 SmallAction("👋 Отпустить") { showRelease = true }
             }
         }
@@ -404,6 +400,46 @@ fun CareScreen(
                 TextButton(onClick = { vm.rename(creatureId, newName); showRename = false }) { Text("Готово") }
             },
             dismissButton = { TextButton(onClick = { showRename = false }) { Text("Отмена") } },
+        )
+    }
+    if (showMove) {
+        AlertDialog(
+            onDismissRequest = { showMove = false },
+            title = { Text("Где будет жить ${c.name}?") },
+            text = {
+                Column {
+                    Habitat.entries.forEach { h ->
+                        Text(
+                            "${h.emoji} ${h.title}" + if (h == c.habitat) "  — сейчас здесь" else "",
+                            fontSize = 18.sp,
+                            fontWeight = if (h == c.habitat) FontWeight.Bold else FontWeight.Normal,
+                            color = Palette.Ink,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable(enabled = h != c.habitat) {
+                                    vm.moveTo(creatureId, h)
+                                    Sounds.play(
+                                        when (h) {
+                                            Habitat.POND -> Sfx.SPLASH
+                                            Habitat.MARS -> Sfx.MAGIC
+                                            else -> Sfx.BOING
+                                        }
+                                    )
+                                    bubble = when (h) {
+                                        Habitat.POND -> "Буль-буль! Я теперь плаваю!"
+                                        Habitat.MARS -> "Бип-бип! Я на Марсе! Тут так легко прыгать!"
+                                        Habitat.HOME -> "Как уютно дома!"
+                                        Habitat.YARD -> "Ура, я во дворе!"
+                                    }
+                                    showMove = false
+                                }
+                                .padding(10.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showMove = false }) { Text("Отмена") } },
         )
     }
     if (showRelease) {

@@ -20,6 +20,7 @@ enum class Npc(val title: String, val role: String, val emoji: String, val voice
     HEDGEHOG("Доктор Ёжик", "Лечит питомцев", "🦔", 1.2f),
     CAT("Кошка Мурка", "Затейница игр", "🐱", 1.45f),
     FROG("Лягушка Квака", "Хозяйка пруда", "🐸", 1.3f),
+    ROBOT("Робот Винтик", "Исследователь Марса", "🤖", 0.9f),
 }
 
 private val ink = Palette.Ink
@@ -63,6 +64,7 @@ fun DrawScope.drawNpc(npc: Npc, feet: Offset, h: Float, time: Float, facingLeft:
             Npc.HEDGEHOG -> drawHedgehog(h, s, time, flip)
             Npc.CAT -> drawCat(h, s, time, flip)
             Npc.FROG -> drawFrog(h, s, time)
+            Npc.ROBOT -> drawRobot(h, s, time, flip)
         }
     }
     return Rect(feet.x - h * 0.45f, feet.y - h, feet.x + h * 0.45f, feet.y)
@@ -246,4 +248,52 @@ private fun DrawScope.drawFrog(h: Float, s: Float, t: Float) {
         lineTo(0f, -h * 0.72f); lineTo(h * 0.04f, -h * 0.62f); lineTo(h * 0.1f, -h * 0.68f); lineTo(h * 0.08f, -h * 0.56f); close()
     }
     outlinedPath(Color(0xFFFFD84D), crown, s * 0.6f)
+}
+
+private fun DrawScope.drawRobot(h: Float, s: Float, t: Float, flip: Float) {
+    val metal = Color(0xFFB8C7D9)
+    val dark = Color(0xFF5B6B80)
+    val glow = Color(0xFF5CE1FF)
+    // колёса-гусеницы
+    drawRoundRect(dark, Offset(-h * 0.24f, -h * 0.12f), Size(h * 0.48f, h * 0.12f), androidx.compose.ui.geometry.CornerRadius(h * 0.06f))
+    for (k in 0..3) drawCircle(Color(0xFF8A99AD), h * 0.035f, Offset(-h * 0.17f + k * h * 0.113f, -h * 0.06f))
+    // руки-манипуляторы
+    val wave = sin(t * 3f) * 18f
+    rotate(-20f - wave, pivot = Offset(-h * 0.2f, -h * 0.38f)) {
+        drawLine(ink, Offset(-h * 0.2f, -h * 0.38f), Offset(-h * 0.36f, -h * 0.26f), strokeWidth = s * 2.4f, cap = StrokeCap.Round)
+        drawLine(metal, Offset(-h * 0.2f, -h * 0.38f), Offset(-h * 0.36f, -h * 0.26f), strokeWidth = s * 1.4f, cap = StrokeCap.Round)
+        drawCircle(dark, h * 0.035f, Offset(-h * 0.36f, -h * 0.26f))
+    }
+    rotate(20f + wave * 0.5f, pivot = Offset(h * 0.2f, -h * 0.38f)) {
+        drawLine(ink, Offset(h * 0.2f, -h * 0.38f), Offset(h * 0.36f, -h * 0.26f), strokeWidth = s * 2.4f, cap = StrokeCap.Round)
+        drawLine(metal, Offset(h * 0.2f, -h * 0.38f), Offset(h * 0.36f, -h * 0.26f), strokeWidth = s * 1.4f, cap = StrokeCap.Round)
+        drawCircle(dark, h * 0.035f, Offset(h * 0.36f, -h * 0.26f))
+    }
+    // корпус
+    val bodyTl = Offset(-h * 0.21f, -h * 0.5f)
+    drawRoundRect(metal, bodyTl, Size(h * 0.42f, h * 0.38f), androidx.compose.ui.geometry.CornerRadius(h * 0.06f))
+    drawRoundRect(ink, bodyTl, Size(h * 0.42f, h * 0.38f), androidx.compose.ui.geometry.CornerRadius(h * 0.06f), style = Stroke(s))
+    // экранчик на груди мигает
+    val screenOn = (sin(t * 4f) > 0f)
+    drawRoundRect(if (screenOn) Color(0xFF7CFFB2) else Color(0xFF2E8A5C), Offset(-h * 0.1f, -h * 0.42f), Size(h * 0.2f, h * 0.12f), androidx.compose.ui.geometry.CornerRadius(h * 0.02f))
+    // голова
+    val headTl = Offset(-h * 0.17f, -h * 0.8f)
+    drawRoundRect(metal, headTl, Size(h * 0.34f, h * 0.27f), androidx.compose.ui.geometry.CornerRadius(h * 0.08f))
+    drawRoundRect(ink, headTl, Size(h * 0.34f, h * 0.27f), androidx.compose.ui.geometry.CornerRadius(h * 0.08f), style = Stroke(s))
+    // антенна с огоньком
+    drawLine(ink, Offset(0f, -h * 0.8f), Offset(0f, -h * 0.92f), strokeWidth = s * 0.8f)
+    drawCircle(if ((t % 1.2f) < 0.6f) Color(0xFFFF5C5C) else Color(0xFFFFB3B3), h * 0.035f, Offset(0f, -h * 0.94f))
+    // глаза-окуляры
+    val closed = blink(t, 0.4f)
+    for (dx in listOf(-0.075f, 0.075f)) {
+        val c = Offset(h * dx + flip * h * 0.01f, -h * 0.68f)
+        if (closed) drawLine(ink, Offset(c.x - h * 0.04f, c.y), Offset(c.x + h * 0.04f, c.y), strokeWidth = s)
+        else {
+            drawCircle(Color(0xFF1E2A3A), h * 0.05f, c)
+            drawCircle(glow, h * 0.032f, c)
+            drawCircle(Color.White, h * 0.012f, Offset(c.x + h * 0.01f, c.y - h * 0.012f))
+        }
+    }
+    // рот-решётка
+    for (k in 0..3) drawLine(dark, Offset(-h * 0.06f + k * h * 0.04f, -h * 0.6f), Offset(-h * 0.06f + k * h * 0.04f, -h * 0.57f), strokeWidth = s * 0.6f)
 }

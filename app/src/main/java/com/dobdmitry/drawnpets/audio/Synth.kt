@@ -15,7 +15,7 @@ enum class Sfx {
 }
 
 /** Фоновые мелодии. */
-enum class Track { YARD, POND, GAMES }
+enum class Track { YARD, POND, GAMES, MARS }
 
 /**
  * Синтезатор: все звуки и музыка генерируются прямо в коде, без аудиофайлов.
@@ -183,6 +183,8 @@ object Synth {
         Track.YARD -> Song(112f, 60, listOf(0, 7, 9, 5, 0, 7, 5, 0), listOf(false, false, true, false, false, false, false, false), Wave.TRIANGLE, true, false, 0.55f, 3)
         Track.POND -> Song(84f, 65, listOf(0, 9, 5, 7, 0, 9, 5, 0), listOf(false, true, false, false, false, true, false, false), Wave.BELL, false, true, 0.35f, 7)
         Track.GAMES -> Song(132f, 67, listOf(0, 7, 9, 5, 0, 5, 7, 0), listOf(false, false, true, false, false, false, false, false), Wave.SOFT_SQUARE, true, false, 0.75f, 11)
+        // Космос: медленные колокольчики и арпеджио
+        Track.MARS -> Song(76f, 62, listOf(0, 9, 5, 7, 0, 9, 7, 0), listOf(false, true, false, false, false, true, false, false), Wave.BELL, false, true, 0.3f, 21)
     }
 
     /** Мелодия на 16 тактов, бесшовно зацикленная. */

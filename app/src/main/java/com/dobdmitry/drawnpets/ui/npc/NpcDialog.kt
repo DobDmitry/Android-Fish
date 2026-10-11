@@ -74,6 +74,15 @@ private val catPhrases = listOf(
     "После игр питомцы радуются, но устают. Не забудь их покормить!",
 )
 
+private val robotPhrases = listOf(
+    "Бип-буп! Добро пожаловать на Марс!",
+    "На Марсе притяжение слабее — здесь все прыгают высоко-высоко!",
+    "В теплице я выращиваю помидоры. На Марсе! Бип!",
+    "Марс красный из-за ржавой пыли. Не волнуйся, она не кусается.",
+    "Ракета готова к полёту. Хочешь переселить сюда друга?",
+    "Мой марсоход нашёл три камня и одну конфету. Бип-бип!",
+)
+
 private val frogPhrases = listOf(
     "Ква! В моём пруду всем хватит места!",
     "Нажми на воду — и рыбки приплывут за кормом.",
@@ -102,6 +111,7 @@ fun NpcDialog(
         Npc.RACCOON -> raccoonPhrases[phraseIndex % raccoonPhrases.size]
         Npc.CAT -> catPhrases[phraseIndex % catPhrases.size]
         Npc.FROG -> frogPhrases[phraseIndex % frogPhrases.size]
+        Npc.ROBOT -> robotPhrases[phraseIndex % robotPhrases.size]
         Npc.HEDGEHOG -> if (sick.isEmpty()) {
             "Все здоровы и веселы! Не забывай мыть лапки перед едой."
         } else {
@@ -221,18 +231,23 @@ fun NpcDialog(
                         PillButton("💬 Ещё", color = Palette.Lemon, textColor = Palette.Ink) { notice = null; phraseIndex++ }
                     }
 
-                    Npc.FROG -> {
+                    Npc.FROG, Npc.ROBOT -> {
+                        val target = if (npc == Npc.FROG) Habitat.POND else Habitat.MARS
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PillButton("🐠 Покормить рыбок", color = Palette.Water) { onClose(); onFeedFish() }
-                            PillButton("🏊 Переселить", color = Palette.Mint, textColor = Palette.Ink) { pickPond = !pickPond }
+                            if (npc == Npc.FROG) {
+                                PillButton("🐠 Покормить рыбок", color = Palette.Water) { onClose(); onFeedFish() }
+                            } else {
+                                PillButton("💬 Ещё", color = Palette.Lemon, textColor = Palette.Ink) { notice = null; phraseIndex++ }
+                            }
+                            PillButton(if (npc == Npc.FROG) "🏊 Переселить" else "🚀 Переселить", color = Palette.Mint, textColor = Palette.Ink) { pickPond = !pickPond }
                         }
                         if (pickPond) {
                             Spacer(Modifier.height(10.dp))
-                            val yard = state.creatures.filter { it.habitat == Habitat.YARD }
+                            val yard = state.creatures.filter { it.habitat != target }
                             if (yard.isEmpty()) {
-                                Text("Во дворе никого нет — все уже плавают у меня!", color = Palette.Ink)
+                                Text("Все друзья уже здесь!", color = Palette.Ink)
                             } else {
-                                Text("Кого пригласить в пруд?", fontWeight = FontWeight.Bold, color = Palette.Ink)
+                                Text(if (npc == Npc.FROG) "Кого пригласить в пруд?" else "Кого отправить на Марс?", fontWeight = FontWeight.Bold, color = Palette.Ink)
                                 yard.forEach { c ->
                                     Row(
                                         Modifier
@@ -241,9 +256,9 @@ fun NpcDialog(
                                             .clip(RoundedCornerShape(14.dp))
                                             .background(Palette.SkyLight)
                                             .clickable {
-                                                vm.moveTo(c.id, Habitat.POND)
-                                                Sounds.play(Sfx.SPLASH)
-                                                notice = "Ква! ${c.name} теперь живёт в пруду!"
+                                                vm.moveTo(c.id, target)
+                                                Sounds.play(if (target == Habitat.POND) Sfx.SPLASH else Sfx.MAGIC)
+                                                notice = if (target == Habitat.POND) "Ква! ${c.name} теперь живёт в пруду!" else "Бип! ${c.name} прилетел на Марс!"
                                                 pickPond = false
                                             }
                                             .padding(8.dp),

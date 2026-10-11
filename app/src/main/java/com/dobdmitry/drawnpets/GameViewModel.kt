@@ -176,6 +176,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         return id
     }
 
+    /** Какое место показывает главный экран (двор, дом или Марс). */
+    var location by mutableStateOf(Habitat.YARD)
+
     /** Последнее повышение уровня — показываем праздничное окно. */
     var levelUp by mutableStateOf<LevelUp?>(null)
         private set
