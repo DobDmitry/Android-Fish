@@ -26,6 +26,11 @@ jobs:
             grep -E "^e: |error:|What went wrong" -A3 build.log | head -150
           fi
           exit $status
+      - name: Check APK version and signature
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          $BT/aapt2 dump badging app/build/outputs/apk/debug/app-debug.apk | head -1
+          $BT/apksigner verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -i "SHA-256"
       - name: Rename APK
         run: mv app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/zhivye-risunki-1.0.${{ github.run_number }}.apk"
       - uses: actions/upload-artifact@v4
