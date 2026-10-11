@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.DrawnPets" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#7EC8F0</item>
+        <item name="android:navigationBarColor">#5DAE4B</item>
+        <item name="android:windowBackground">@color/bg</item>
+    </style>
+</resources>
