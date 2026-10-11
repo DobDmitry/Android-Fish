@@ -63,12 +63,12 @@ private class HideState {
     var size = Size.Zero
     val particles = mutableListOf<Particle>()
 
-    val swapDuration: Float get() = (0.95f - round * 0.04f).coerceAtLeast(0.45f)
+    val swapDuration: Float get() = (0.75f - round * 0.04f).coerceAtLeast(0.32f)
 
     fun nextRound() {
         round += 1
         hideBush = Random.nextInt(6)
-        swapsLeft = (round - 2).coerceIn(0, 6)
+        swapsLeft = (round - 2).coerceIn(0, 8)
         wrongBush = -1
         phase = HidePhase.INTRO
         timer = 0f
@@ -190,7 +190,7 @@ fun HideSeekGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) ->
                     val k = (st.timer / 0.4f).coerceIn(0f, 1f)
                     drawCreature(sprite, Offset(c.x, c.y - r * 0.2f), ch, t, jump = ch * 0.55f * k, accessory = accessory, shadow = false, action = if (st.phase == HidePhase.FOUND) Action.HAPPY else Action.WAVE, actionTime = st.timer)
                 }
-                val rustle = st.phase == HidePhase.GUESS && i == hidden && st.round <= 3 && (t % 2.2f) < 0.35f
+                val rustle = st.phase == HidePhase.GUESS && i == hidden && st.round <= 2 && (t % 2.2f) < 0.35f
                 drawBush(c, r, if (rustle) sin(t * 40f) * 5f else 0f)
                 if (i == st.wrongBush && st.phase == HidePhase.MISSED) {
                     drawLabel("Пусто!", Offset(c.x, c.y - r * 1.6f), 42f, Color(0xFF8A5A3B))

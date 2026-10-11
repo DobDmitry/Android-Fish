@@ -19,8 +19,8 @@ enum class EyeState { OPEN, BLINK, HAPPY, SLEEP }
  */
 class Animator(val rig: Rig) {
     companion object {
-        const val GX = 20
-        const val GY = 20
+        const val GX = 30
+        const val GY = 30
         const val VERTS = (GX + 1) * (GY + 1)
     }
 
@@ -37,9 +37,10 @@ class Animator(val rig: Rig) {
     private val bodyW = max(1f, rig.right - rig.left)
 
     // Параметры позы, вычисляются один раз на кадр
-    private var legAngles = FloatArray(rig.legs.size)
-    private var legLift = FloatArray(rig.legs.size)
-    private var armAngle = FloatArray(rig.arms.size)
+    private val limbAngle = FloatArray(rig.limbs.size)
+    private val limbLift = FloatArray(rig.limbs.size)
+    private val legCount = rig.limbs.count { it.kind == LimbKind.LEG }
+    private val hasLegs = legCount > 0
     private var breath = 0f
     private var sway = 0f
     private var squash = 0f
@@ -78,46 +79,70 @@ class Animator(val rig: Rig) {
         }
         swim = if (action == Action.SWIM) 1f else 0f
         // Без ног персонаж ходит вразвалочку: низ качается из стороны в сторону.
-        waddle = if (rig.legs.isEmpty()) when (action) {
+        waddle = if (!hasLegs) when (action) {
             Action.WALK -> sin(p) * 0.08f
             Action.RUN -> sin(p) * 0.1f
             Action.HAPPY -> sin(t * 12f) * 0.04f
             else -> 0f
         } else 0f
 
-        for (i in rig.legs.indices) {
-            val opposite = if (i % 2 == 0) 0f else PI.toFloat()
-            legAngles[i] = when (action) {
-                Action.WALK -> sin(p + opposite) * 0.42f
-                Action.RUN -> sin(p + opposite) * 0.6f
-                Action.HAPPY -> sin(t * 12f + opposite) * 0.18f
-                Action.JUMP -> if (i % 2 == 0) 0.28f else -0.28f
-                Action.SWIM -> sin(t * 7f + opposite) * 0.35f
-                else -> 0f
-            }
-            legLift[i] = when (action) {
-                Action.WALK, Action.RUN -> max(0f, -cos(p + opposite)) * (if (action == Action.RUN) 0.2f else 0.13f)
-                Action.HAPPY -> max(0f, sin(t * 12f + opposite)) * 0.08f
-                else -> 0f
-            }
-        }
-        for (i in rig.arms.indices) {
-            val arm = rig.arms[i]
-            val left = arm.side < 0
-            val off = if (left) 0f else PI.toFloat()
-            // «Поднять руку» — положительный угол
-            armAngle[i] = when (action) {
-                Action.IDLE -> 0.12f * sin(t * 1.6f + off + s)
-                Action.WALK -> 0.38f * sin(p + off)
-                Action.RUN -> 0.6f * sin(p + off)
-                Action.HAPPY -> 1.25f + 0.3f * sin(t * 14f + off)
-                Action.WAVE -> if (!left || rig.arms.size == 1) 1.15f + 0.45f * sin(actionT * 11f) else 0.15f
-                Action.JUMP -> 1.2f
-                Action.EAT -> 0.45f + 0.2f * sin(actionT * 11f)
-                Action.TALK -> 0.25f + 0.2f * sin(t * 5f + off)
-                Action.SLEEP -> -0.2f
-                Action.SAD -> -0.35f
-                Action.SWIM -> 0.6f * sin(t * 9f + off * 0.5f)
+        for (i in rig.limbs.indices) {
+            val limb = rig.limbs[i]
+            val opposite = if (limb.order % 2 == 0) 0f else PI.toFloat()
+            when (limb.kind) {
+                LimbKind.LEG -> {
+                    // Две или четыре ноги шагают поочерёдно, щупальца — волной.
+                    val wave = legCount == 3 || legCount > 4
+                    val opposite = if (wave) limb.order * 0.8f else opposite
+                    val soft = (bodyH * 0.35f / max(1f, limb.length)).coerceIn(0.45f, 1f)
+                    limbAngle[i] = soft * when (action) {
+                        Action.WALK -> sin(p + opposite) * 0.42f
+                        Action.RUN -> sin(p + opposite) * 0.6f
+                        Action.HAPPY -> sin(t * 12f + opposite) * 0.18f
+                        Action.JUMP -> if (wave) sin(limb.order * 1.7f) * 0.25f else if (limb.order % 2 == 0) 0.28f else -0.28f
+                        // щупальца и лапки в воде колышутся волной
+                        Action.SWIM -> sin(t * 5f + limb.order * 1.3f) * 0.35f
+                        Action.IDLE -> sin(t * 1.3f + limb.order * 1.1f + s) * 0.03f
+                        else -> 0f
+                    }
+                    limbLift[i] = when (action) {
+                        Action.WALK, Action.RUN -> max(0f, -cos(p + opposite)) * (if (action == Action.RUN) 0.2f else 0.13f)
+                        Action.HAPPY -> max(0f, sin(t * 12f + opposite)) * 0.08f
+                        else -> 0f
+                    }
+                }
+                LimbKind.ARM -> {
+                    val left = limb.side < 0
+                    val off = if (left) 0f else PI.toFloat()
+                    // «Поднять руку» — положительный угол
+                    val raise = when (action) {
+                        Action.IDLE -> 0.12f * sin(t * 1.6f + off + s)
+                        Action.WALK -> 0.38f * sin(p + off)
+                        Action.RUN -> 0.6f * sin(p + off)
+                        Action.HAPPY -> 1.1f + 0.3f * sin(t * 14f + off)
+                        Action.WAVE -> if (!left || rig.limbs.count { it.kind == LimbKind.ARM } == 1) 1.1f + 0.45f * sin(actionT * 11f) else 0.15f
+                        Action.JUMP -> 1.1f
+                        Action.EAT -> 0.45f + 0.2f * sin(actionT * 11f)
+                        Action.TALK -> 0.25f + 0.2f * sin(t * 5f + off)
+                        Action.SLEEP -> -0.15f
+                        Action.SAD -> -0.3f
+                        Action.SWIM -> 0.6f * sin(t * 9f + off * 0.5f)
+                    }
+                    // Длинные руки и щупальца двигаем мягче, чтобы не «улетали»
+                    val soft = (bodyH * 0.45f / max(1f, limb.length)).coerceIn(0.35f, 1f)
+                    limbAngle[i] = (if (left) raise else -raise) * soft
+                    limbLift[i] = 0f
+                }
+                LimbKind.ANTENNA -> {
+                    limbAngle[i] = when (action) {
+                        Action.HAPPY, Action.WAVE -> 0.3f * sin(t * 11f + limb.order * 2f)
+                        Action.WALK, Action.RUN -> 0.2f * sin(p + limb.order * 2f)
+                        Action.SWIM -> 0.3f * sin(t * 6f + limb.order)
+                        Action.SAD, Action.SLEEP -> 0.25f * (if (limb.side < 0) -1f else 1f)
+                        else -> 0.1f * sin(t * 2.5f + limb.order * 2f + s)
+                    }
+                    limbLift[i] = 0f
+                }
             }
         }
     }
@@ -127,55 +152,13 @@ class Animator(val rig: Rig) {
         return k * k * (3 - 2 * k)
     }
 
-    /** Деформация одной точки картинки. Результат пишется в out[0], out[1]. */
-    fun map(x0: Float, y0: Float, out: FloatArray) {
-        var x = x0
-        var y = y0
+    /** Деформация одной точки тела (глаза, рот, макушка). Результат — в out[0], out[1]. */
+    fun map(x0: Float, y0: Float, out: FloatArray) = mapFrom(x0, y0, x0, y0, out)
 
-        // 1. Ноги — поворот вокруг бедра ближайшей ноги.
-        if (rig.legs.isNotEmpty() && y > rig.hipY - bodyH * 0.02f) {
-            var best = -1
-            var bestD = Float.MAX_VALUE
-            for (i in rig.legs.indices) {
-                val l = rig.legs[i]
-                val d = if (x < l.xMin) l.xMin - x else if (x > l.xMax) x - l.xMax else 0f
-                if (d < bestD) { bestD = d; best = i }
-            }
-            val leg = rig.legs[best]
-            val legW = leg.xMax - leg.xMin
-            val wx = 1f - smooth(0f, legW * 0.6f + 4f, bestD)
-            val len = max(1f, leg.footY - leg.hipY)
-            val depth = (y - leg.hipY) / len
-            val wy = smooth(-0.05f, 0.3f, depth)
-            val a = legAngles[best] * wx * wy
-            if (a != 0f) {
-                val dx = x - leg.cx
-                val dy = y - leg.hipY
-                val c = cos(a); val sn = sin(a)
-                x = leg.cx + dx * c - dy * sn
-                y = leg.hipY + dx * sn + dy * c
-            }
-            y -= legLift[best] * len * wx * depth.coerceIn(0f, 1f)
-        }
-
-        // 2. Руки — поворот вокруг плеча.
-        for (i in rig.arms.indices) {
-            val arm = rig.arms[i]
-            val span = abs(arm.tipX - arm.shoulderX)
-            if (span < 1f) continue
-            val out01 = if (arm.side < 0) (arm.shoulderX - x0) / span else (x0 - arm.shoulderX) / span
-            if (out01 <= -0.05f) continue
-            val margin = (arm.bottom - arm.top) * 0.35f + bodyH * 0.04f
-            val wy = smooth(arm.top - margin, arm.top, y0) * (1f - smooth(arm.bottom, arm.bottom + margin, y0))
-            val wx = smooth(0.02f, 0.4f, out01)
-            val angle = armAngle[i] * wx * wy * (if (arm.side < 0) 1f else -1f)
-            if (angle == 0f) continue
-            val dx = x - arm.shoulderX
-            val dy = y - arm.shoulderY
-            val c = cos(angle); val sn = sin(angle)
-            x = arm.shoulderX + dx * c - dy * sn
-            y = arm.shoulderY + dx * sn + dy * c
-        }
+    /** Деформация тела: (x0, y0) — исходная точка (для весов), (x, y) — уже сдвинутая конечностью. */
+    private fun mapFrom(x0: Float, y0: Float, xs: Float, ys: Float, out: FloatArray) {
+        var x = xs
+        var y = ys
 
         // 3. Тело: дыхание, покачивание, «чавканье», грусть — всё выше бёдер.
         val hip = rig.hipY
@@ -210,13 +193,32 @@ class Animator(val rig: Rig) {
     /** Заполняет массив вершин сетки (GX+1)×(GY+1) для drawBitmapMesh. */
     fun fillMesh(verts: FloatArray) {
         var k = 0
+        var v = 0
         for (j in 0..GY) {
-            val y = h * j / GY
+            val y0 = h * j / GY
             for (i in 0..GX) {
-                val x = w * i / GX
-                map(x, y, tmp)
+                val x0 = w * i / GX
+                var x = x0
+                var y = y0
+                val li = rig.vertexLimb[v]
+                if (li >= 0) {
+                    // Конечность поворачивается вокруг точки крепления; у самого крепления — плавно.
+                    val limb = rig.limbs[li]
+                    val along = rig.vertexAlong[v]
+                    val a = limbAngle[li] * smooth(0.05f, 0.35f, along)
+                    if (a != 0f) {
+                        val dx = x - limb.ax
+                        val dy = y - limb.ay
+                        val c = cos(a); val sn = sin(a)
+                        x = limb.ax + dx * c - dy * sn
+                        y = limb.ay + dx * sn + dy * c
+                    }
+                    y -= limbLift[li] * limb.length * along.coerceAtMost(1f)
+                }
+                mapFrom(x0, y0, x, y, tmp)
                 verts[k++] = tmp[0]
                 verts[k++] = tmp[1]
+                v++
             }
         }
     }

@@ -56,7 +56,7 @@ fun JumpGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Uni
     val st = remember { JumpState() }
     var time by remember { mutableFloatStateOf(0f) }
     var score by remember { mutableIntStateOf(0) }
-    var lives by remember { mutableIntStateOf(5) }
+    var lives by remember { mutableIntStateOf(3) }
     val finish by rememberUpdatedState(onFinish)
 
     LaunchedEffect(Unit) {
@@ -69,8 +69,8 @@ fun JumpGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Uni
                 time += dt
                 val sz = st.size
                 if (sz.width <= 0f) return@withFrameNanos
-                if (st.speed == 0f) st.speed = sz.width * 0.36f
-                st.speed += sz.width * 0.007f * dt
+                if (st.speed == 0f) st.speed = sz.width * 0.45f
+                st.speed += sz.width * 0.012f * dt
                 st.distance += st.speed * dt
                 // физика прыжка
                 val gravity = sz.height * 3.2f
@@ -82,7 +82,7 @@ fun JumpGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Uni
                 st.nextObstacle -= dt
                 if (st.nextObstacle <= 0f) {
                     st.obstacles += Obstacle(sz.width + 60f, listOf("🌵", "🪨", "🍄", "🌵").random())
-                    st.nextObstacle = (1.3f + Random.nextFloat() * 1.2f) * (sz.width * 0.45f / st.speed).coerceAtLeast(0.7f)
+                    st.nextObstacle = (1.0f + Random.nextFloat() * 1.1f) * (sz.width * 0.45f / st.speed).coerceAtLeast(0.55f)
                 }
                 st.nextCoin -= dt
                 if (st.nextCoin <= 0f) {

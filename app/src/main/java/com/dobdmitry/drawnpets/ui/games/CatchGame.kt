@@ -51,14 +51,14 @@ private class CatchState {
 }
 
 private val goodFood = listOf("🍎", "🍌", "🥕", "🍪", "🧀", "🍓", "🍐", "🥛")
-private const val CATCH_DURATION = 40f
+private const val CATCH_DURATION = 45f
 
 @Composable
 fun CatchGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Unit) {
     val st = remember { CatchState() }
     var time by remember { mutableFloatStateOf(0f) }
     var score by remember { mutableIntStateOf(0) }
-    var lives by remember { mutableIntStateOf(5) }
+    var lives by remember { mutableIntStateOf(3) }
     var secondsLeft by remember { mutableIntStateOf(CATCH_DURATION.toInt()) }
     val finish by rememberUpdatedState(onFinish)
 
@@ -82,19 +82,19 @@ fun CatchGame(sprite: CreatureSprite?, accessory: String?, onFinish: (Int) -> Un
                 if (st.eatT >= 0f) { st.eatT += dt; if (st.eatT > 0.5f) st.eatT = -1f }
                 // появление предметов
                 st.spawn -= dt
-                val difficulty = 1f + st.elapsed / 40f
+                val difficulty = 1f + st.elapsed / 25f
                 if (st.spawn <= 0f) {
-                    st.spawn = (1.0f / difficulty).coerceAtLeast(0.5f)
+                    st.spawn = (0.85f / difficulty).coerceAtLeast(0.32f)
                     val r = Random.nextFloat()
                     val (emoji, pts) = when {
                         r < 0.07f -> "⭐" to 3
                         r < 0.15f -> "🍰" to 2
-                        r < 0.30f -> listOf("🪨", "🐝").random() to -1
+                        r < 0.33f -> listOf("🪨", "🐝").random() to -1
                         else -> goodFood.random() to 1
                     }
                     st.items += Falling(
                         x = sz.width * (0.08f + Random.nextFloat() * 0.84f), y = -40f, emoji = emoji, points = pts,
-                        speed = sz.height * (0.17f + Random.nextFloat() * 0.1f) * difficulty, spin = (Random.nextFloat() - 0.5f) * 200f,
+                        speed = sz.height * (0.22f + Random.nextFloat() * 0.12f) * difficulty, spin = (Random.nextFloat() - 0.5f) * 200f,
                     )
                 }
                 val pr = st.playerRect

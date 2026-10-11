@@ -94,7 +94,7 @@ fun BalloonGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
                     balloons += Balloon(
                         x = sz.width * (0.1f + Random.nextFloat() * 0.8f),
                         y = sz.height + 80f,
-                        speed = sz.height * (0.1f + Random.nextFloat() * 0.07f) * (1f + elapsed / 50f),
+                        speed = sz.height * (0.13f + Random.nextFloat() * 0.1f) * (1f + elapsed / 40f),
                         color = balloonColors.random(),
                         kind = kind,
                         phase = Random.nextFloat() * 6f,
@@ -130,7 +130,7 @@ fun BalloonGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
                                 BalloonKind.NORMAL -> 1
                                 BalloonKind.FRIEND -> 3
                                 BalloonKind.GOLD -> 5
-                                BalloonKind.STORM -> -1
+                                BalloonKind.STORM -> -3
                             }
                             score = (score + pts).coerceAtLeast(0)
                             if (pts > 0) Sounds.play(Sfx.POP, rate = 0.85f + Random.nextFloat() * 0.4f) else Sounds.play(Sfx.HURT)

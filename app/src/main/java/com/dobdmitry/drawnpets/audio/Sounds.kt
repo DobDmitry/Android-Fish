@@ -41,7 +41,7 @@ object Sounds {
         private set
     var soundOn by mutableStateOf(true)
         private set
-    var voiceOn by mutableStateOf(true)
+    var voiceOn by mutableStateOf(false)
         private set
 
     fun init(context: Context) {
@@ -50,7 +50,7 @@ object Sounds {
         prefs = app.getSharedPreferences("sound", Context.MODE_PRIVATE).also {
             musicOn = it.getBoolean("music", true)
             soundOn = it.getBoolean("sound", true)
-            voiceOn = it.getBoolean("voice", true)
+            voiceOn = it.getBoolean("voice", false)
         }
         val d = File(app.cacheDir, "audio_v$VERSION")
         dir = d

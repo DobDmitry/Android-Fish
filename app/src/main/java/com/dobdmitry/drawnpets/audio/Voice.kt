@@ -8,8 +8,8 @@ import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
 /**
- * Озвучка фраз синтезатором речи Android — для детей, которые ещё не читают.
- * Если русского голоса на телефоне нет, просто молчит.
+ * Озвучка фраз синтезатором речи Android (по умолчанию выключена, включается
+ * в настройках). Если русского голоса на телефоне нет, просто молчит.
  */
 object Voice {
     private var tts: TextToSpeech? = null

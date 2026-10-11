@@ -5,13 +5,24 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
-/** Нога: вертикальная полоса снизу рисунка, которая качается вокруг «бедра». */
-data class Leg(val xMin: Float, val xMax: Float, val hipY: Float, val footY: Float) {
-    val cx: Float get() = (xMin + xMax) / 2
-}
+enum class LimbKind { LEG, ARM, ANTENNA }
 
-/** Рука (или плавник): выступ сбоку тела. side = -1 слева, +1 справа. */
-data class Arm(val side: Int, val shoulderX: Float, val shoulderY: Float, val top: Float, val bottom: Float, val tipX: Float)
+/**
+ * Конечность: тонкая часть рисунка, прикреплённая к телу (рука, нога, щупальце,
+ * рожка, хвост). Качается вокруг точки крепления (ax, ay); (tx, ty) — кончик.
+ * [order] — порядковый номер среди конечностей того же типа слева направо.
+ */
+data class Limb(
+    val kind: LimbKind,
+    val ax: Float,
+    val ay: Float,
+    val tx: Float,
+    val ty: Float,
+    val side: Int,
+    val order: Int,
+) {
+    val length: Float get() = kotlin.math.hypot(tx - ax, ty - ay)
+}
 
 /** Глаз: центр, радиусы и цвет «века» (цвет кожи вокруг глаза). */
 data class Eye(val cx: Float, val cy: Float, val rx: Float, val ry: Float, val lidColor: Int)
@@ -30,18 +41,25 @@ data class Rig(
     val hipY: Float,
     val headX: Float,
     val headY: Float,
-    val legs: List<Leg>,
-    val arms: List<Arm>,
+    val limbs: List<Limb>,
     val eyes: List<Eye>,
+    /** Для каждой вершины сетки — номер конечности, к которой она относится (-1 — тело). */
+    val vertexLimb: IntArray,
+    /** Для каждой вершины — насколько она далеко от крепления конечности (0..1). */
+    val vertexAlong: FloatArray,
 ) {
     val cx: Float get() = (left + right) / 2
+    val legs: List<Limb> get() = limbs.filter { it.kind == LimbKind.LEG }
 
     companion object {
-        fun empty(w: Int, h: Int) = Rig(w, h, 0f, h.toFloat(), 0f, w.toFloat(), h.toFloat(), w / 2f, 0f, emptyList(), emptyList(), emptyList())
+        fun empty(w: Int, h: Int) = Rig(
+            w, h, 0f, h.toFloat(), 0f, w.toFloat(), h.toFloat(), w / 2f, 0f, emptyList(), emptyList(),
+            IntArray(Animator.VERTS) { -1 }, FloatArray(Animator.VERTS),
+        )
     }
 }
 
-/** Находит у рисунка ноги, руки и глаза. Работает с ARGB-пикселями, без Android. */
+/** Находит у рисунка конечности и глаза. Работает с ARGB-пикселями, без Android. */
 object RigAnalyzer {
 
     private const val INK_LUM = 95
@@ -66,10 +84,12 @@ object RigAnalyzer {
         val bodyW = (right - left + 1).toFloat()
         val bodyH = (bottom - top + 1).toFloat()
 
-        val legs = findLegs(inner, w, h, top, bottom, bodyW, bodyH, outline)
-        val hipY = legs.minOfOrNull { it.hipY } ?: bottom.toFloat()
-        val arms = findArms(inner, w, top, left, right, bodyW, bodyH, hipY)
-        val eyes = findEyes(px, inner, w, h, top, bodyH, area)
+        val eyes = findEyes(px, inner, w, h, top, bodyH, bodyW, area)
+        val limbMap = IntArray(n) { -1 }
+        val limbs = findLimbs(inner, limbMap, w, h, top, bodyW, bodyH, eyes)
+        val legs = limbs.filter { it.kind == LimbKind.LEG }
+        val hipY = legs.minOfOrNull { it.ay } ?: bottom.toFloat()
+        val (vLimb, vAlong) = assignVertices(inner, limbMap, limbs, w, h)
 
         // Макушка — для шляпок: верхняя точка в средней трети рисунка.
         var headY = top.toFloat()
@@ -84,20 +104,21 @@ object RigAnalyzer {
         }
         return Rig(
             w, h, top.toFloat(), bottom.toFloat() + 1, left.toFloat(), right.toFloat() + 1,
-            hipY, headX, headY, legs, arms, eyes,
+            hipY, headX, headY, limbs, eyes, vLimb, vAlong,
         )
     }
 
     /** Расстояние (chamfer 3-4, в пикселях) от каждого пикселя рисунка до пустоты. */
-    private fun distanceToEmpty(m: BooleanArray, w: Int, h: Int): FloatArray {
+    internal fun distanceToEmpty(m: BooleanArray, w: Int, h: Int, outsideEmpty: Boolean = true): FloatArray {
         val inf = 1_000_000
+        val edge = if (outsideEmpty) 3 else inf
         val d = IntArray(m.size) { if (m[it]) inf else 0 }
         for (y in 0 until h) for (x in 0 until w) {
             val i = y * w + x
             if (d[i] == 0) continue
             var v = d[i]
-            v = min(v, if (x > 0) d[i - 1] + 3 else 3)
-            v = min(v, if (y > 0) d[i - w] + 3 else 3)
+            v = min(v, if (x > 0) d[i - 1] + 3 else edge)
+            v = min(v, if (y > 0) d[i - w] + 3 else edge)
             if (x > 0 && y > 0) v = min(v, d[i - w - 1] + 4)
             if (x < w - 1 && y > 0) v = min(v, d[i - w + 1] + 4)
             d[i] = v
@@ -106,8 +127,8 @@ object RigAnalyzer {
             val i = y * w + x
             if (d[i] == 0) continue
             var v = d[i]
-            v = min(v, if (x < w - 1) d[i + 1] + 3 else 3)
-            v = min(v, if (y < h - 1) d[i + w] + 3 else 3)
+            v = min(v, if (x < w - 1) d[i + 1] + 3 else edge)
+            v = min(v, if (y < h - 1) d[i + w] + 3 else edge)
             if (x < w - 1 && y < h - 1) v = min(v, d[i + w + 1] + 4)
             if (x > 0 && y < h - 1) v = min(v, d[i + w - 1] + 4)
             d[i] = v
@@ -136,118 +157,241 @@ object RigAnalyzer {
         return (depth + 1f).coerceIn(2f, 16f)
     }
 
-    private class Run(val x0: Int, val x1: Int) {
-        val c get() = (x0 + x1) / 2f
-        val width get() = x1 - x0 + 1
+    /** Морфологическое «открытие»: что останется от маски, если стереть всё тоньше 2·r. */
+    internal fun opening(m: BooleanArray, w: Int, h: Int, r: Float): BooleanArray {
+        val d = distanceToEmpty(m, w, h)
+        val core = BooleanArray(m.size) { m[it] && d[it] > r }
+        if (core.none { it }) return core
+        val notCore = BooleanArray(m.size) { !core[it] }
+        val toCore = distanceToEmpty(notCore, w, h, outsideEmpty = false)
+        return BooleanArray(m.size) { m[it] && (core[it] || toCore[it] <= r + 1.5f) }
     }
 
-    private fun runs(m: BooleanArray, w: Int, y: Int, minGap: Int, minWidth: Int): List<Run> {
-        val out = mutableListOf<Run>()
-        var x = 0
-        var start = -1
-        var lastOn = -10_000
-        while (x < w) {
-            if (m[y * w + x]) {
-                if (start < 0) start = x
-                else if (x - lastOn > minGap) {
-                    out += Run(start, lastOn); start = x
+    private fun components(m: BooleanArray, w: Int, h: Int): List<IntArray> {
+        val seen = BooleanArray(m.size)
+        val queue = IntArray(m.size)
+        val out = mutableListOf<IntArray>()
+        for (s in m.indices) {
+            if (!m[s] || seen[s]) continue
+            var head = 0; var tail = 0
+            queue[tail++] = s; seen[s] = true
+            while (head < tail) {
+                val i = queue[head++]
+                val x = i % w; val y = i / w
+                for (dy in -1..1) for (dx in -1..1) {
+                    if (dx == 0 && dy == 0) continue
+                    val nx = x + dx; val ny = y + dy
+                    if (nx !in 0 until w || ny !in 0 until h) continue
+                    val j = ny * w + nx
+                    if (m[j] && !seen[j]) { seen[j] = true; queue[tail++] = j }
                 }
-                lastOn = x
             }
-            x++
+            out += queue.copyOf(tail)
         }
-        if (start >= 0) out += Run(start, lastOn)
-        return out.filter { it.width >= minWidth }
+        return out
     }
 
-    private fun findLegs(m: BooleanArray, w: Int, h: Int, top: Int, bottom: Int, bodyW: Float, bodyH: Float, outline: Float): List<Leg> {
-        val minGap = max(2, (bodyW * 0.02f).toInt())
-        val minWidth = max(2, (bodyW * 0.025f).toInt())
-        // Ищем самую нижнюю строку «внутренней» маски.
-        var innerBottom = bottom
-        while (innerBottom > top && (0 until w).none { m[innerBottom * w + it] }) innerBottom--
-        val sampleY = (innerBottom - bodyH * 0.05f).toInt().coerceAtLeast(top)
-        val feet = runs(m, w, sampleY, minGap, minWidth).sortedByDescending { it.width }.take(4).sortedBy { it.x0 }
-        if (feet.size < 2) return emptyList()
+    private class Candidate(val pixels: IntArray, val ax: Float, val ay: Float, val tx: Float, val ty: Float)
 
-        // Поднимаемся вверх, пока ноги не сольются в одно тело.
-        var hipY = sampleY
-        val maxLeg = (bodyH * 0.6f).toInt()
-        val xMin = IntArray(feet.size) { feet[it].x0 }
-        val xMax = IntArray(feet.size) { feet[it].x1 }
-        var y = sampleY
-        while (y > top && sampleY - y < maxLeg) {
-            val rs = runs(m, w, y, minGap, minWidth)
-            // Сколько ног ещё видно по отдельности?
-            val matched = feet.indices.map { i -> rs.filter { r -> r.x1 >= xMin[i] - minGap && r.x0 <= xMax[i] + minGap } }
-            val distinct = matched.map { it.firstOrNull() }.toSet()
-            if (matched.any { it.isEmpty() } || distinct.size < feet.size) break
-            feet.indices.forEach { i ->
-                val r = matched[i].first()
-                // ноги могут чуть расширяться к телу, но не больше чем вдвое
-                if (r.width < feet[i].width * 2.5f) {
-                    xMin[i] = min(xMin[i], r.x0); xMax[i] = max(xMax[i], r.x1)
+    /**
+     * Тонкие части рисунка, прикреплённые к толстому «телу». Если тонкая часть
+     * крепится широко (как нога улитки), смотрим уже её тонкие отростки (рожки).
+     */
+    private fun limbCandidates(region: BooleanArray, body: BooleanArray, w: Int, h: Int, minLen: Float, minArea: Int, depth: Int): List<Candidate> {
+        val thin = BooleanArray(region.size) { region[it] && !body[it] }
+        val out = mutableListOf<Candidate>()
+        for (comp in components(thin, w, h)) {
+            if (comp.size < minArea) continue
+            var sx = 0f; var sy = 0f; var cnt = 0
+            var cx0 = w; var cy0 = h; var cx1 = 0; var cy1 = 0
+            for (i in comp) {
+                val x = i % w; val y = i / w
+                var touches = false
+                for (dy in -1..1) for (dx in -1..1) {
+                    val nx = x + dx; val ny = y + dy
+                    if (nx in 0 until w && ny in 0 until h && body[ny * w + nx]) touches = true
+                }
+                if (touches) {
+                    sx += x; sy += y; cnt++
+                    if (x < cx0) cx0 = x; if (x > cx1) cx1 = x; if (y < cy0) cy0 = y; if (y > cy1) cy1 = y
                 }
             }
-            hipY = y
-            y--
+            if (cnt == 0) continue // оторванный кусочек — не двигаем
+            val ax = sx / cnt; val ay = sy / cnt
+            var best = comp[0]; var bestD = -1f
+            for (i in comp) {
+                val dx = i % w - ax; val dy = i / w - ay
+                val d = dx * dx + dy * dy
+                if (d > bestD) { bestD = d; best = i }
+            }
+            val len = sqrt(bestD)
+            val contact = max(cx1 - cx0, cy1 - cy0).toFloat()
+            if (contact > len * 0.75f || len < minLen) {
+                // Широкое крепление: это скорее часть тела. Ищем на ней тонкие отростки.
+                if (depth == 0 && len >= minLen) {
+                    val sub = BooleanArray(region.size)
+                    for (i in comp) sub[i] = true
+                    val d = distanceToEmpty(sub, w, h)
+                    var md = 0f
+                    for (i in comp) md = max(md, d[i])
+                    val subBody = opening(sub, w, h, max(1.5f, md * 0.45f))
+                    val body2 = BooleanArray(region.size) { body[it] || subBody[it] }
+                    out += limbCandidates(sub, body2, w, h, minLen * 0.8f, minArea, depth + 1)
+                }
+                continue
+            }
+            out += Candidate(comp, ax, ay, (best % w).toFloat(), (best / w).toFloat())
         }
-        val legLen = innerBottom - hipY
-        if (legLen < bodyH * 0.08f) return emptyList()
-        // Ноги примерно одинаковые и не слишком широкие (иначе это хвост и брюхо рыбы и т.п.).
-        val widths = feet.indices.map { xMax[it] - xMin[it] + 1 }
-        if (widths.max() > bodyW * 0.42f || widths.max() > widths.min() * 3.2f) return emptyList()
-        val footY = bottom.toFloat() + 1
-        val hip = hipY.toFloat() + legLen * 0.08f
-        return feet.indices.map { i ->
-            Leg(xMin[i] - outline, xMax[i] + outline, hip, footY)
-        }
+        return out
     }
 
     /**
-     * Рука — тонкий выступ сбоку: в столбцах за пределами туловища рисунок
-     * занимает по высоте мало места. У круглого тела такого нет.
+     * Если конечность внизу расходится на несколько «ветвей» (щупальца медузы,
+     * соединённые оборкой), делим её на отдельные конечности.
      */
-    private fun findArms(m: BooleanArray, w: Int, top: Int, left: Int, right: Int, bodyW: Float, bodyH: Float, hipY: Float): List<Arm> {
-        val y0 = (top + bodyH * 0.12f).toInt()
-        val y1 = (hipY - bodyH * 0.03f).toInt()
-        if (y1 - y0 < 6) return emptyList()
-        val cover = IntArray(w)
-        for (x in 0 until w) {
-            var c = 0
-            for (y in y0..y1) if (m[y * w + x]) c++
-            cover[x] = c
-        }
-        val thin = bodyH * 0.24f
-        val out = mutableListOf<Arm>()
-        for (side in intArrayOf(-1, 1)) {
-            // крайний столбец «внутренней» маски с этой стороны
-            var edge = if (side < 0) left else right
-            while (edge in 0 until w && cover[edge] == 0 && (if (side < 0) edge < right else edge > left)) edge -= side
-            var x = edge
-            var steps = 0
-            while (x in 0 until w && cover[x] in 1 until thin.toInt().coerceAtLeast(2)) { x -= side; steps++ }
-            // небольшие разрывы (тонкая линия руки) не должны обрывать поиск
-            if (x in 0 until w && cover[x] == 0) continue
-            val len = steps.toFloat()
-            if (len < bodyW * 0.07f || len > bodyW * 0.6f) continue
-            val shoulderX = x.toFloat()
-            var aTop = Int.MAX_VALUE; var aBottom = -1
-            var sy = 0f; var sc = 0
-            // Границы руки берём по внешним 70% её длины — ближе к плечу там ещё туловище.
-            var cx = edge
-            while (cx != x) {
-                val fromShoulder = abs(cx - x) / len
-                for (y in y0..y1) if (m[y * w + cx]) {
-                    if (fromShoulder > 0.3f) { if (y < aTop) aTop = y; if (y > aBottom) aBottom = y }
-                    if (fromShoulder in 0.3f..0.6f) { sy += y; sc++ }
-                }
-                cx -= side
+    private fun splitBranches(c: Candidate, w: Int): List<Candidate> {
+        val dy = c.ty - c.ay
+        val len = kotlin.math.hypot(c.tx - c.ax, dy)
+        if (len < 20f || dy < len * 0.6f) return listOf(c)
+        var y0 = Int.MAX_VALUE; var y1 = Int.MIN_VALUE
+        for (i in c.pixels) { val y = i / w; if (y < y0) y0 = y; if (y > y1) y1 = y }
+        val rows = HashMap<Int, MutableList<Int>>()
+        for (i in c.pixels) rows.getOrPut(i / w) { mutableListOf() } += i % w
+        fun runsAt(y: Int): List<Float> {
+            val xs = rows[y]?.sorted() ?: return emptyList()
+            val out = mutableListOf<Float>()
+            var start = xs[0]; var prev = xs[0]
+            for (k in 1 until xs.size) {
+                if (xs[k] - prev > 3) { out += (start + prev) / 2f; start = xs[k] }
+                prev = xs[k]
             }
-            if (aBottom < 0 || sc == 0) continue
-            out += Arm(side, shoulderX, sy / sc, aTop.toFloat(), aBottom.toFloat(), edge.toFloat())
+            out += (start + prev) / 2f
+            return out
         }
-        return out
+        // Ищем строку, где ветви уже разошлись
+        val startRow = (y0 + (y1 - y0) * 0.35f).toInt()
+        val counts = (startRow..y1).map { runsAt(it).size }.sorted()
+        val typical = counts[counts.size / 2]
+        if (typical < 2) return listOf(c)
+        var row = startRow
+        while (row < y1 && runsAt(row).size != typical) row++
+        var centers = runsAt(row).toMutableList()
+        if (centers.size < 2) return listOf(c)
+        // Проводим каждую ветвь вниз, следуя за ближайшим отрезком
+        val trackX = HashMap<Int, List<Float>>()
+        trackX[row] = centers.toList()
+        for (y in row + 1..y1) {
+            val rs = runsAt(y)
+            if (rs.size == centers.size) centers = rs.toMutableList()
+            else if (rs.isNotEmpty()) centers = centers.map { cx -> rs.minByOrNull { abs(it - cx) }!!.let { r -> if (abs(r - cx) < 12f) r else cx } }.toMutableList()
+            trackX[y] = centers.toList()
+        }
+        val first = trackX[row]!!
+        val parts = List(first.size) { mutableListOf<Int>() }
+        for (i in c.pixels) {
+            val x = i % w; val y = i / w
+            val cs = trackX[y] ?: first
+            var best = 0
+            for (k in cs.indices) if (abs(cs[k] - x) < abs(cs[best] - x)) best = k
+            parts[best] += i
+        }
+        return parts.filter { it.size > c.pixels.size / (first.size * 4) }.map { p ->
+            var minY = Int.MAX_VALUE; var maxI = p[0]
+            for (i in p) { if (i / w < minY) minY = i / w; if (i / w > maxI / w) maxI = i }
+            val attachY = max(minY.toFloat(), c.ay)
+            val topXs = p.filter { abs(it / w - attachY) <= 3 }.map { it % w }.ifEmpty { p.map { it % w } }
+            Candidate(p.toIntArray(), topXs.average().toFloat(), attachY, (maxI % w).toFloat(), (maxI / w).toFloat())
+        }
+    }
+
+    private fun findLimbs(
+        inner: BooleanArray, limbMap: IntArray, w: Int, h: Int, top: Int,
+        bodyW: Float, bodyH: Float, eyes: List<Eye>,
+    ): List<Limb> {
+        val dist = distanceToEmpty(inner, w, h)
+        var maxD = 0f
+        var innerArea = 0
+        for (i in inner.indices) if (inner[i]) { innerArea++; if (dist[i] > maxD) maxD = dist[i] }
+        if (innerArea < 50) return emptyList()
+        val body = opening(inner, w, h, max(2.5f, maxD * 0.33f))
+        val minLen = max(bodyH, bodyW) * 0.07f
+        val minArea = max(12, (innerArea * 0.0015f).toInt())
+        var cands = limbCandidates(inner, body, w, h, minLen, minArea, 0)
+        // Кусок с глазом — это голова, а не рука.
+        cands = cands.filter { c ->
+            eyes.none { e -> c.pixels.any { i -> abs(i % w - e.cx) < e.rx && abs(i / w - e.cy) < e.ry } }
+        }
+        cands = cands.flatMap { splitBranches(it, w) }
+        cands = cands.sortedByDescending { it.pixels.size }.take(10)
+        val bodyCx = run {
+            var s = 0L; var c = 0
+            for (i in body.indices) if (body[i]) { s += i % w; c++ }
+            if (c > 0) s / c.toFloat() else w / 2f
+        }
+        val raw = cands.map { c ->
+            val dx = c.tx - c.ax; val dy = c.ty - c.ay
+            val len = max(1f, sqrt(dx * dx + dy * dy))
+            val kind = when {
+                dy / len > 0.55f && c.ay > top + bodyH * 0.42f -> LimbKind.LEG
+                dy / len < -0.8f -> LimbKind.ANTENNA
+                else -> LimbKind.ARM
+            }
+            val side = when {
+                abs(dx) > len * 0.2f -> if (dx < 0) -1 else 1
+                else -> if (c.ax < bodyCx) -1 else 1
+            }
+            Triple(c, kind, side)
+        }
+        val limbs = mutableListOf<Limb>()
+        for (kind in LimbKind.entries) {
+            raw.filter { it.second == kind }.sortedBy { it.first.ax }.forEachIndexed { order, (c, k, side) ->
+                for (i in c.pixels) limbMap[i] = limbs.size
+                limbs += Limb(k, c.ax, c.ay, c.tx, c.ty, side, order)
+            }
+        }
+        return limbs
+    }
+
+    /** Каждой вершине сетки — ближайшая часть рисунка (тело или конечность). */
+    private fun assignVertices(inner: BooleanArray, limbMap: IntArray, limbs: List<Limb>, w: Int, h: Int): Pair<IntArray, FloatArray> {
+        val n = w * h
+        val label = IntArray(n) { -1 }
+        val steps = IntArray(n) { Int.MAX_VALUE }
+        val queue = IntArray(n)
+        var head = 0; var tail = 0
+        for (i in 0 until n) if (inner[i]) {
+            label[i] = if (limbMap[i] >= 0) limbMap[i] else -2
+            steps[i] = 0
+            queue[tail++] = i
+        }
+        while (head < tail) {
+            val i = queue[head++]
+            val x = i % w; val y = i / w
+            val s = steps[i] + 1
+            if (x > 0 && steps[i - 1] > s) { steps[i - 1] = s; label[i - 1] = label[i]; queue[tail++] = i - 1 }
+            if (x < w - 1 && steps[i + 1] > s) { steps[i + 1] = s; label[i + 1] = label[i]; queue[tail++] = i + 1 }
+            if (y > 0 && steps[i - w] > s) { steps[i - w] = s; label[i - w] = label[i]; queue[tail++] = i - w }
+            if (y < h - 1 && steps[i + w] > s) { steps[i + w] = s; label[i + w] = label[i]; queue[tail++] = i + w }
+        }
+        val gx = Animator.GX; val gy = Animator.GY
+        val reach = (w.toFloat() / gx + h.toFloat() / gy) * 1.2f
+        val vLimb = IntArray(Animator.VERTS) { -1 }
+        val vAlong = FloatArray(Animator.VERTS)
+        var k = 0
+        for (j in 0..gy) for (i in 0..gx) {
+            val x = (w.toFloat() * i / gx).toInt().coerceIn(0, w - 1)
+            val y = (h.toFloat() * j / gy).toInt().coerceIn(0, h - 1)
+            val idx = y * w + x
+            val l = label[idx]
+            if (l >= 0 && steps[idx] <= reach) {
+                val limb = limbs[l]
+                vLimb[k] = l
+                val d = kotlin.math.hypot(x - limb.ax, y - limb.ay)
+                vAlong[k] = (d / max(1f, limb.length)).coerceIn(0f, 1.2f)
+            }
+            k++
+        }
+        return vLimb to vAlong
     }
 
     private class Blob(val pixels: IntArray, val x0: Int, val y0: Int, val x1: Int, val y1: Int) {
@@ -264,7 +408,7 @@ object RigAnalyzer {
         return (r * 299 + g * 587 + b * 114) / 1000
     }
 
-    private fun findEyes(px: IntArray, inner: BooleanArray, w: Int, h: Int, top: Int, bodyH: Float, area: Int): List<Eye> {
+    private fun findEyes(px: IntArray, inner: BooleanArray, w: Int, h: Int, top: Int, bodyH: Float, bodyW: Float, area: Int): List<Eye> {
         val yLimit = (top + bodyH * 0.7f).toInt().coerceAtMost(h - 1)
         val dark = BooleanArray(w * h)
         for (y in top..yLimit) for (x in 0 until w) {
@@ -312,9 +456,30 @@ object RigAnalyzer {
             if (score > bestScore) { bestScore = score; best = a to b }
         }
         val chosen = best?.let { listOf(it.first, it.second) }
-            ?: cands.filter { it.cy < top + bodyH * 0.5f && it.fill > 0.5f }.maxByOrNull { it.area }?.let { listOf(it) }
+            ?: cands.filter { it.cy < top + bodyH * 0.5f && it.fill > 0.5f && hasWhiteAround(it, px, inner, w, h) }
+                .maxByOrNull { it.area }?.let { listOf(it) }
             ?: return emptyList()
-        return chosen.sortedBy { it.cx }.map { makeEye(it, px, inner, w, h) }
+        val maxR = max(5f, min(bodyH * 0.09f, bodyW * 0.13f))
+        val made = chosen.sortedBy { it.cx }.map { makeEye(it, px, inner, w, h) }
+            .map { it.copy(rx = it.rx.coerceAtMost(maxR), ry = it.ry.coerceAtMost(maxR)) }
+        if (made.size < 2) return made
+        // Глаза обычно рисуют одинаковыми — берём больший размер для обоих.
+        val rx = made.maxOf { it.rx }; val ry = made.maxOf { it.ry }
+        return made.map { it.copy(rx = rx, ry = ry) }
+    }
+
+    /** Одиночный глаз засчитываем, только если вокруг зрачка есть белок (иначе это просто точка). */
+    private fun hasWhiteAround(b: Blob, px: IntArray, inner: BooleanArray, w: Int, h: Int): Boolean {
+        val r = max(b.bw, b.bh) / 2f + 3f
+        var white = 0; var total = 0
+        for (k in 0 until 16) {
+            val a = k * Math.PI / 8
+            val x = (b.cx + kotlin.math.cos(a) * r).toInt(); val y = (b.cy + kotlin.math.sin(a) * r).toInt()
+            if (x !in 0 until w || y !in 0 until h || !inner[y * w + x]) continue
+            total++
+            if (lum(px[y * w + x]) > 200) white++
+        }
+        return total >= 8 && white >= total * 0.6f
     }
 
     /** Если зрачок нарисован внутри белого кружка — берём размер всего кружка. */
@@ -338,7 +503,7 @@ object RigAnalyzer {
             }
             if (found > 0) reach += found
         }
-        val r = if (reach.size >= 5) reach.sorted()[reach.size / 2] + 1.5f else pr + 2f
+        val r = (if (reach.size >= 5) reach.sorted()[reach.size / 2] + 1.5f else pr + 2f).coerceAtMost(pr * 2.6f + 3f)
         val rx = max(r, b.bw / 2f + 2f)
         val ry = max(r, b.bh / 2f + 2f)
         // Цвет «века» — средний светлый цвет вокруг глаза.
