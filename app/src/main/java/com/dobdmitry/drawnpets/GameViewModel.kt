@@ -16,6 +16,7 @@ import com.dobdmitry.drawnpets.data.Catalog
 import com.dobdmitry.drawnpets.data.WornItem
 import com.dobdmitry.drawnpets.data.Creature
 import com.dobdmitry.drawnpets.data.DailyQuest
+import com.dobdmitry.drawnpets.data.FieldCoin
 import com.dobdmitry.drawnpets.data.GameState
 import com.dobdmitry.drawnpets.data.Habitat
 import com.dobdmitry.drawnpets.data.QuestType
@@ -31,6 +32,9 @@ import java.util.UUID
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.random.Random
+
+/** Сколько монеток в сутки появляется в местах (на все места вместе). */
+const val DAILY_FIELD_COINS = 20
 
 enum class FeedResult { OK, FAVORITE, FULL, NO_FOOD, SLEEPING }
 
@@ -60,10 +64,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
+            maybeDropCoin(first = true)
             while (true) {
                 delay(5_000)
                 applyDecay(System.currentTimeMillis())
                 ensureDailyQuests()
+                maybeDropCoin(first = false)
                 scheduleSave()
             }
         }
@@ -289,6 +295,35 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         if (state.coins < acc.price || id in state.ownedAccessories || acc.minLevel > maxLevel) return false
         update { s -> s.copy(coins = s.coins - acc.price, ownedAccessories = s.ownedAccessories + id) }
         return true
+    }
+
+    // ---------------------------------------------------------------- монетки в местах
+
+    /**
+     * Иногда в случайном месте появляется монетка. Всего не больше
+     * [DAILY_FIELD_COINS] в сутки на все места и не больше трёх одновременно.
+     */
+    private fun maybeDropCoin(first: Boolean) {
+        val day = today()
+        if (state.coinDay != day) state = state.copy(coinDay = day, coinsDropped = 0)
+        if (state.coinsDropped >= DAILY_FIELD_COINS || state.fieldCoins.size >= 3) return
+        // в начале дня сразу одна монетка, дальше — в среднем раз в 2,5 минуты
+        val chance = if (first && state.coinsDropped == 0) 1f else 5f / 150f
+        if (Random.nextFloat() > chance) return
+        val coin = FieldCoin(
+            id = System.nanoTime(),
+            location = Habitat.entries.random(),
+            x = 0.06f + Random.nextFloat() * 0.88f,
+            y = Random.nextFloat(),
+        )
+        update { it.copy(fieldCoins = it.fieldCoins + coin, coinsDropped = it.coinsDropped + 1) }
+    }
+
+    /** Подобрать монетку. Возвращает, сколько монет получено. */
+    fun collectFieldCoin(id: Long): Int {
+        val coin = state.fieldCoins.firstOrNull { it.id == id } ?: return 0
+        update { it.copy(fieldCoins = it.fieldCoins - coin, coins = it.coins + coin.value) }
+        return coin.value
     }
 
     // ---------------------------------------------------------------- игры

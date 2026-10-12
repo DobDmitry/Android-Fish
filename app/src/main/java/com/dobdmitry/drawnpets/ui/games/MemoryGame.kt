@@ -82,10 +82,14 @@ fun MemoryGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
             }
             first = null
             second = null
-            if (pairsFound == PAIRS) {
-                delay(400)
-                finish((40 - moves * 2).coerceAtLeast(6))
-            }
+        }
+    }
+    // Конец игры — в отдельном эффекте: сброс second выше перезапускает эффект
+    // по ключу second и отменял бы его посреди ожидания, и игра «зависала».
+    LaunchedEffect(pairsFound) {
+        if (pairsFound == PAIRS) {
+            delay(500)
+            finish((40 - moves * 2).coerceAtLeast(6))
         }
     }
 

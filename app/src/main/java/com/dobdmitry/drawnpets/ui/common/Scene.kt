@@ -28,7 +28,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dobdmitry.drawnpets.audio.Sfx
 import com.dobdmitry.drawnpets.audio.Sounds
+import com.dobdmitry.drawnpets.data.FieldCoin
 import com.dobdmitry.drawnpets.data.Habitat
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import kotlin.math.sin
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.max
@@ -110,9 +115,38 @@ fun Modifier.scenePan(pan: ScenePan): Modifier = pointerInput(pan) {
     )
 }
 
-/** Вкладки мест: двор, дом, пруд, Марс. */
+/**
+ * Монетки этого места: лежат на земле, покачиваются и поблёскивают.
+ * [rects] заполняется прямоугольниками для нажатий. Если монетка за краем
+ * экрана — у края появляется маленькая подсказка.
+ */
+fun DrawScope.drawFieldCoins(
+    coins: List<FieldCoin>, pan: ScenePan, minY: Float, maxY: Float, t: Float, rects: MutableMap<Long, Rect>,
+) {
+    rects.clear()
+    val s = size.height * 0.045f
+    var leftHint = false
+    var rightHint = false
+    for (c in coins) {
+        val x = pan.sx(c.x)
+        val ground = size.height * (minY + c.y * (maxY - minY))
+        val bob = sin(t * 3f + c.id % 7) * s * 0.12f
+        val center = Offset(x, ground - s * 0.7f + bob)
+        if (x < -s) { leftHint = true; continue }
+        if (x > size.width + s) { rightHint = true; continue }
+        drawOval(Color.Black.copy(alpha = 0.18f), Offset(x - s * 0.35f, ground - s * 0.12f), Size(s * 0.7f, s * 0.22f))
+        drawEmoji("🪙", center, s)
+        if ((t + c.id % 5) % 2.5f < 0.3f) drawEmoji("✨", Offset(center.x + s * 0.4f, center.y - s * 0.4f), s * 0.5f)
+        rects[c.id] = Rect(center.x - s * 0.7f, center.y - s * 0.7f, center.x + s * 0.7f, center.y + s * 0.7f)
+    }
+    val a = 0.6f + 0.4f * sin(t * 4f)
+    if (leftHint) drawEmoji("🪙", Offset(30f, size.height * 0.42f), 40f, a)
+    if (rightHint) drawEmoji("🪙", Offset(size.width - 30f, size.height * 0.42f), 40f, a)
+}
+
+/** Вкладки мест: двор, дом, пруд, Марс. В местах с монетками — значок 🪙. */
 @Composable
-fun LocationTabs(current: Habitat, onSelect: (Habitat) -> Unit, modifier: Modifier = Modifier) {
+fun LocationTabs(current: Habitat, onSelect: (Habitat) -> Unit, modifier: Modifier = Modifier, coinsAt: Set<Habitat> = emptySet()) {
     Row(
         modifier
             .fillMaxWidth()
@@ -123,7 +157,7 @@ fun LocationTabs(current: Habitat, onSelect: (Habitat) -> Unit, modifier: Modifi
         Habitat.entries.forEach { h ->
             val on = h == current
             Text(
-                "${h.emoji} ${h.title}",
+                "${h.emoji} ${h.title}" + if (h in coinsAt) " 🪙" else "",
                 fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Palette.Ink,
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))

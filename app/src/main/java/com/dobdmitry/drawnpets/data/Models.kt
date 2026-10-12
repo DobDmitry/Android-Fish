@@ -181,6 +181,12 @@ data class DailyQuest(
     val done: Boolean get() = progress >= target
 }
 
+/**
+ * Монетка, которая лежит в одном из мест. [x] — доля ширины фона,
+ * [y] — доля полосы, по которой ходят персонажи (0 — дальний край, 1 — ближний).
+ */
+data class FieldCoin(val id: Long, val location: Habitat, val x: Float, val y: Float, val value: Int = 1)
+
 data class GameState(
     val coins: Int = 60,
     val creatures: List<Creature> = emptyList(),
@@ -192,6 +198,12 @@ data class GameState(
     val lastUpdate: Long = System.currentTimeMillis(),
     val bestScores: Map<String, Int> = emptyMap(),
     val starterCreated: Boolean = false,
+    /** Монетки, разбросанные по местам (собираются нажатием). */
+    val fieldCoins: List<FieldCoin> = emptyList(),
+    /** День, к которому относится счётчик [coinsDropped]. */
+    val coinDay: Long = -1,
+    /** Сколько монеток уже появилось сегодня (не больше 20 в сутки). */
+    val coinsDropped: Int = 0,
 ) {
     fun creature(id: String): Creature? = creatures.firstOrNull { it.id == id }
 }

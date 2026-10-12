@@ -113,6 +113,16 @@ class Storage(context: Context) {
         put("lastGiftDay", s.lastGiftDay)
         put("lastUpdate", s.lastUpdate)
         put("starterCreated", s.starterCreated)
+        put("coinDay", s.coinDay)
+        put("coinsDropped", s.coinsDropped)
+        put("fieldCoins", JSONArray().apply {
+            s.fieldCoins.forEach { f ->
+                put(JSONObject().apply {
+                    put("id", f.id); put("location", f.location.name)
+                    put("x", f.x.toDouble()); put("y", f.y.toDouble()); put("value", f.value)
+                })
+            }
+        })
         put("creatures", JSONArray().apply {
             s.creatures.forEach { c ->
                 put(JSONObject().apply {
@@ -155,6 +165,17 @@ class Storage(context: Context) {
                 })
             }
         })
+    }
+
+    private fun readFieldCoins(o: JSONObject): List<FieldCoin> {
+        val arr = o.optJSONArray("fieldCoins") ?: return emptyList()
+        val out = mutableListOf<FieldCoin>()
+        for (i in 0 until arr.length()) {
+            val f = arr.getJSONObject(i)
+            val loc = runCatching { Habitat.valueOf(f.getString("location")) }.getOrNull() ?: continue
+            out += FieldCoin(f.getLong("id"), loc, f.getDouble("x").toFloat(), f.getDouble("y").toFloat(), f.optInt("value", 1))
+        }
+        return out
     }
 
     private fun readOutfit(c: JSONObject): List<WornItem> {
@@ -224,6 +245,9 @@ class Storage(context: Context) {
             lastUpdate = o.optLong("lastUpdate", System.currentTimeMillis()),
             bestScores = best,
             starterCreated = o.optBoolean("starterCreated"),
+            fieldCoins = readFieldCoins(o),
+            coinDay = o.optLong("coinDay", -1),
+            coinsDropped = o.optInt("coinsDropped"),
         )
     }
 }

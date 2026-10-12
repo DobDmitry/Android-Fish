@@ -29,7 +29,6 @@ import com.dobdmitry.drawnpets.ui.create.CreateScreen
 import com.dobdmitry.drawnpets.ui.games.GamesMenuScreen
 import com.dobdmitry.drawnpets.ui.games.MiniGame
 import com.dobdmitry.drawnpets.ui.games.PlayScreen
-import com.dobdmitry.drawnpets.ui.pond.PondScreen
 import com.dobdmitry.drawnpets.ui.rig.RigEditorScreen
 import com.dobdmitry.drawnpets.ui.outfit.OutfitScreen
 import com.dobdmitry.drawnpets.ui.shop.ShopScreen
@@ -37,7 +36,6 @@ import com.dobdmitry.drawnpets.ui.world.WorldScreen
 
 sealed interface Screen {
     data object World : Screen
-    data object Pond : Screen
     data object Create : Screen
     data object Shop : Screen
     data object Album : Screen
@@ -93,11 +91,10 @@ fun App(vm: GameViewModel) {
 
     // Музыка зависит от экрана
     val track = when (stack.last()) {
-        Screen.Pond -> Track.POND
         is Screen.Games, is Screen.Play -> Track.GAMES
         Screen.World -> when (vm.location) {
             Habitat.MARS -> Track.MARS
-            Habitat.HOME -> Track.POND
+            Habitat.HOME, Habitat.POND -> Track.POND
             else -> Track.YARD
         }
         else -> Track.YARD
@@ -114,24 +111,17 @@ fun App(vm: GameViewModel) {
                 Screen.World -> WorldScreen(
                     vm = vm,
                     onCreate = { open(Screen.Create) },
-                    onPond = { open(Screen.Pond) },
                     onGames = { open(Screen.Games(null)) },
                     onShop = { open(Screen.Shop) },
                     onAlbum = { open(Screen.Album) },
                     onCare = { open(Screen.Care(it)) },
                 )
-                Screen.Pond -> PondScreen(vm, onBack = ::pop, onCare = { open(Screen.Care(it)) }, onLocation = { h ->
-                    vm.location = h
-                    open(Screen.World)
-                })
                 Screen.Create -> CreateScreen(vm, onBack = ::pop) { id, habitat ->
                     Sounds.play(Sfx.MAGIC)
                     vm.state.creature(id)?.let { Voice.say("Ура! ${it.name} ожил!", pitch = 1.4f) }
                     pop()
-                    if (habitat == Habitat.POND) open(Screen.Pond) else {
-                        vm.location = habitat
-                        open(Screen.World)
-                    }
+                    vm.location = habitat
+                    open(Screen.World)
                 }
                 Screen.Shop -> ShopScreen(vm, onBack = ::pop)
                 Screen.Album -> AlbumScreen(vm, onBack = ::pop, onCare = { open(Screen.Care(it)) }, onCreate = { open(Screen.Create) })

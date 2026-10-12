@@ -37,6 +37,7 @@ import com.dobdmitry.drawnpets.GameViewModel
 import com.dobdmitry.drawnpets.R
 import com.dobdmitry.drawnpets.ui.common.LocationTabs
 import com.dobdmitry.drawnpets.ui.common.ScenePan
+import com.dobdmitry.drawnpets.ui.common.drawFieldCoins
 import com.dobdmitry.drawnpets.ui.common.drawSceneBackground
 import com.dobdmitry.drawnpets.ui.common.scenePan
 import androidx.compose.ui.graphics.ImageBitmap
@@ -98,8 +99,18 @@ private val fishLooks = listOf(
     FishLook(Color(0xFF8BE07A), Color(0xFF3FA34D), 0.12f, false),
 )
 
+/**
+ * Сцена пруда: рыбки, корм, пузырьки и нарисованные жители. Шапка, вкладки
+ * и нижние кнопки — общие для всех мест (см. WorldScreen).
+ */
 @Composable
-fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit, onLocation: (Habitat) -> Unit) {
+fun PondScene(
+    vm: GameViewModel,
+    selectedId: String?,
+    onSelect: (String?) -> Unit,
+    onFrog: () -> Unit,
+    onFed: () -> Unit,
+) {
     val state = vm.state
     val pond = state.creatures.filter { it.habitat == Habitat.POND }
     val currentPond by rememberUpdatedState(pond)
@@ -114,10 +125,9 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit, 
     val canvasSizeRef = remember { arrayOf(Size.Zero) }
     val pan = remember { ScenePan(0.4f) }
     val background = ImageBitmap.imageResource(R.drawable.bg_pond)
-    var selectedId by remember { mutableStateOf<String?>(null) }
-    var showFrog by remember { mutableStateOf(false) }
     val frogRectRef = remember { arrayOf(Rect.Zero) }
-    var hint by remember { mutableStateOf(true) }
+    val coinRects = remember { mutableMapOf<Long, Rect>() }
+    val coinsHere = state.fieldCoins.filter { it.location == Habitat.POND }
 
     fun randomTarget(s: Swimmer, size: Size) {
         s.tx = size.width * (0.08f + Random.nextFloat() * 0.84f)
@@ -213,14 +223,21 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit, 
                 .scenePan(pan)
                 .pointerInput(Unit) {
                     detectTapGestures { pos ->
+                        val coin = coinRects.entries.firstOrNull { it.value.inflate(20f).contains(pos) }?.key
+                        if (coin != null) {
+                            val got = vm.collectFieldCoin(coin)
+                            Sounds.play(Sfx.COIN)
+                            particles += Particle(pos.x, pos.y, "+$got 🪙", 0f, -110f, 44f, isLabel = true, color = Palette.Coral)
+                            return@detectTapGestures
+                        }
                         if (frogRectRef[0].contains(pos)) {
                             Sounds.play(Sfx.TAP)
-                            showFrog = true
+                            onFrog()
                             return@detectTapGestures
                         }
                         val hit = currentPond.firstOrNull { c -> creatures[c.id]?.rect?.inflate(16f)?.contains(pos) == true }
                         if (hit != null) {
-                            selectedId = hit.id
+                            onSelect(hit.id)
                             if (!hit.sleeping) {
                                 vm.pet(hit.id)
                                 creatures[hit.id]?.happyT = 0f
@@ -236,9 +253,9 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit, 
                             particles.burst(pos.x, pos.y, "✨", 2, 24f)
                             Sounds.play(Sfx.SPLASH, volume = 0.7f)
                             vm.fishFed()
-                            hint = false
+                            onFed()
                         }
-                        selectedId = null
+                        onSelect(null)
                     }
                 }
         ) {
@@ -272,50 +289,13 @@ fun PondScreen(vm: GameViewModel, onBack: () -> Unit, onCare: (String) -> Unit, 
                 )
                 drawLabel(c.name, Offset(feet.x, feet.y + 30f), 30f, if (c.id == selectedId) Palette.Coral else Palette.Ink)
             }
+            drawFieldCoins(coinsHere, pan, BOTTOM + 0.02f, BOTTOM + 0.1f, t, coinRects)
             drawParticles(particles)
             val a = 0.35f + 0.25f * sin(t * 3f)
             if (pan.offset > 4f) drawEmoji("◀️", Offset(28f, size.height * 0.5f), 48f, a)
             if (pan.offset < pan.worldW - pan.viewW - 4f) drawEmoji("▶️", Offset(size.width - 28f, size.height * 0.5f), 48f, a)
         }
 
-        Column(Modifier.fillMaxWidth().statusBarsPadding()) {
-            ScreenHeader("Пруд", state.coins, onBack)
-            LocationTabs(Habitat.POND, onSelect = onLocation)
-        }
-
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(bottom = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            val selected = selectedId?.let { state.creature(it) }
-            if (selected != null) {
-                CreatureInfoCard(selected, vm.bitmap(selected.id), onCare = { onCare(selected.id) }, onClose = { selectedId = null })
-            } else if (hint) {
-                SpeechBubble(
-                    if (pond.isEmpty()) "🐸 Ква! Нажми на воду, чтобы покормить рыбок. А ещё можно поселить сюда рисунки!"
-                    else "🐸 Нажми на воду — рыбки приплывут за кормом!"
-                )
-            }
-        }
-
-        LaunchedEffect(Unit) {
-            if (!frogSpoken) {
-                frogSpoken = true
-                kotlinx.coroutines.delay(600)
-                Voice.say("Ква! Нажми на воду, и рыбки приплывут за кормом!", pitch = Npc.FROG.voicePitch)
-            }
-        }
-
-        if (showFrog) {
-            NpcDialog(
-                npc = Npc.FROG, vm = vm, onClose = { showFrog = false },
-                onFeedFish = { hint = true },
-            )
-        }
     }
 }
 

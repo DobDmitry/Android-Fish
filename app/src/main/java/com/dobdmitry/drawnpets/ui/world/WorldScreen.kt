@@ -64,6 +64,8 @@ import com.dobdmitry.drawnpets.ui.common.drawEmoji
 import com.dobdmitry.drawnpets.ui.common.drawLabel
 import com.dobdmitry.drawnpets.ui.common.drawParticles
 import com.dobdmitry.drawnpets.ui.common.drawSceneBackground
+import com.dobdmitry.drawnpets.ui.common.drawFieldCoins
+import com.dobdmitry.drawnpets.ui.pond.PondScene
 import com.dobdmitry.drawnpets.ui.common.scenePan
 import com.dobdmitry.drawnpets.ui.common.step
 import com.dobdmitry.drawnpets.ui.npc.Npc
@@ -133,7 +135,6 @@ private class SceneItem(val y: Float, val draw: DrawScope.() -> Unit)
 fun WorldScreen(
     vm: GameViewModel,
     onCreate: () -> Unit,
-    onPond: () -> Unit,
     onGames: () -> Unit,
     onShop: () -> Unit,
     onAlbum: () -> Unit,
@@ -142,7 +143,7 @@ fun WorldScreen(
     val location = vm.location
     // Для каждой локации — своя панорама и свои гуляющие
     key(location) {
-        LocationScene(vm, location, onCreate, onPond, onGames, onShop, onAlbum, onCare)
+        LocationScene(vm, location, onCreate, onGames, onShop, onAlbum, onCare)
     }
 }
 
@@ -151,17 +152,18 @@ private fun LocationScene(
     vm: GameViewModel,
     location: Habitat,
     onCreate: () -> Unit,
-    onPond: () -> Unit,
     onGames: () -> Unit,
     onShop: () -> Unit,
     onAlbum: () -> Unit,
     onCare: (String) -> Unit,
 ) {
+    val isPond = location == Habitat.POND
     val spec = specs[location] ?: specs.getValue(Habitat.YARD)
     val state = vm.state
     val here = state.creatures.filter { it.habitat == location }
     val currentHere by rememberUpdatedState(here)
-    val background: ImageBitmap = ImageBitmap.imageResource(spec.bg)
+    // у пруда свой фон внутри PondScene
+    val background: ImageBitmap? = if (isPond) null else ImageBitmap.imageResource(spec.bg)
 
     val pan = remember { ScenePan(spec.start) }
     val walkers = remember { mutableMapOf<String, Walker>() }
@@ -171,6 +173,9 @@ private fun LocationScene(
     var selectedId by remember { mutableStateOf<String?>(null) }
     var openNpc by remember { mutableStateOf<Npc?>(null) }
     var showSettings by remember { mutableStateOf(false) }
+    var pondHint by remember { mutableStateOf(true) }
+    val coinRects = remember { mutableMapOf<Long, Rect>() }
+    val coinsHere = state.fieldCoins.filter { it.location == location }
 
     LaunchedEffect(Unit) {
         var last = withFrameNanos { it }
@@ -195,12 +200,27 @@ private fun LocationScene(
     }
 
     Box(Modifier.fillMaxSize()) {
-        Canvas(
+        if (isPond) {
+            PondScene(
+                vm = vm,
+                selectedId = selectedId,
+                onSelect = { selectedId = it },
+                onFrog = { openNpc = Npc.FROG },
+                onFed = { pondHint = false },
+            )
+        } else Canvas(
             Modifier
                 .fillMaxSize()
                 .scenePan(pan)
                 .pointerInput(Unit) {
                     detectTapGestures { pos ->
+                        val coin = coinRects.entries.firstOrNull { it.value.inflate(20f).contains(pos) }?.key
+                        if (coin != null) {
+                            val got = vm.collectFieldCoin(coin)
+                            Sounds.play(Sfx.COIN)
+                            particles += Particle(pos.x, pos.y, "+$got 🪙", 0f, -110f, 44f, isLabel = true, color = Palette.Coral)
+                            return@detectTapGestures
+                        }
                         val hit = currentHere
                             .mapNotNull { c -> walkers[c.id]?.let { c to it } }
                             .sortedByDescending { it.second.y }
@@ -230,7 +250,7 @@ private fun LocationScene(
                 }
         ) {
             val t = time
-            drawSceneBackground(background, pan)
+            background?.let { drawSceneBackground(it, pan) }
             val items = mutableListOf<SceneItem>()
             for (spot in spec.npcs) {
                 items += SceneItem(spot.y) {
@@ -261,6 +281,7 @@ private fun LocationScene(
                 }
             }
             items.sortedBy { it.y }.forEach { it.draw(this) }
+            drawFieldCoins(coinsHere, pan, spec.minY, spec.maxY, t, coinRects)
             drawParticles(particles)
             // Подсказка, что сцену можно двигать: стрелки у краёв
             val a = 0.35f + 0.25f * sin(t * 3f)
@@ -301,10 +322,11 @@ private fun LocationScene(
                     contentAlignment = Alignment.Center,
                 ) { Text("⚙️", fontSize = 22.sp) }
             }
-            LocationTabs(location, onSelect = { h ->
-                selectedId = null
-                if (h == Habitat.POND) onPond() else vm.location = h
-            })
+            LocationTabs(
+                location,
+                onSelect = { h -> selectedId = null; vm.location = h },
+                coinsAt = state.fieldCoins.map { it.location }.toSet(),
+            )
             val showHint = location == Habitat.YARD && state.creatures.size <= 2 && selectedId == null && openNpc == null
             LaunchedEffect(showHint) {
                 if (showHint && !hintSpoken) {
@@ -312,6 +334,13 @@ private fun LocationScene(
                     kotlinx.coroutines.delay(800)
                     Voice.say("Привет! Нарисуй персонажа на бумаге и нажми на кнопку с камерой. И он оживёт!", pitch = Npc.OWL.voicePitch)
                 }
+            }
+            if (isPond && pondHint && selectedId == null && openNpc == null) {
+                SpeechBubble(
+                    if (here.isEmpty()) "🐸 Ква! Нажми на воду, чтобы покормить рыбок. А ещё сюда можно поселить рисунки!"
+                    else "🐸 Нажми на воду — рыбки приплывут за кормом!",
+                    Modifier.padding(horizontal = 24.dp, vertical = 6.dp),
+                )
             }
             if (showHint) {
                 SpeechBubble(
@@ -350,7 +379,8 @@ private fun LocationScene(
         openNpc?.let { npc ->
             NpcDialog(
                 npc = npc, vm = vm, onClose = { openNpc = null },
-                onOpenShop = onShop, onOpenGames = onGames, onFeedFish = onPond,
+                onOpenShop = onShop, onOpenGames = onGames,
+                onFeedFish = { if (!isPond) vm.location = Habitat.POND },
             )
         }
     }
