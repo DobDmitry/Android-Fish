@@ -7,6 +7,7 @@ plugins {
 android {
     namespace = "com.dobdmitry.drawnpets"
     compileSdk = 35
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         applicationId = "com.dobdmitry.drawnpets"

@@ -122,9 +122,10 @@ fun Modifier.scenePan(pan: ScenePan): Modifier = pointerInput(pan) {
  */
 fun DrawScope.drawFieldCoins(
     coins: List<FieldCoin>, pan: ScenePan, minY: Float, maxY: Float, t: Float, rects: MutableMap<Long, Rect>,
+    paperIcons: ImageBitmap? = null,
 ) {
     rects.clear()
-    val s = size.height * 0.045f
+    val s = if (paperIcons != null) max(size.height * 0.06f, 24.dp.toPx()) else size.height * 0.045f
     var leftHint = false
     var rightHint = false
     for (c in coins) {
@@ -135,13 +136,18 @@ fun DrawScope.drawFieldCoins(
         if (x < -s) { leftHint = true; continue }
         if (x > size.width + s) { rightHint = true; continue }
         drawOval(Color.Black.copy(alpha = 0.18f), Offset(x - s * 0.35f, ground - s * 0.12f), Size(s * 0.7f, s * 0.22f))
-        drawEmoji("🪙", center, s)
+        if (paperIcons != null) drawPaperIcon(paperIcons, PaperIcon.COIN, center, s) else drawEmoji("🪙", center, s)
         if ((t + c.id % 5) % 2.5f < 0.3f) drawEmoji("✨", Offset(center.x + s * 0.4f, center.y - s * 0.4f), s * 0.5f)
         rects[c.id] = Rect(center.x - s * 0.7f, center.y - s * 0.7f, center.x + s * 0.7f, center.y + s * 0.7f)
     }
     val a = 0.6f + 0.4f * sin(t * 4f)
-    if (leftHint) drawEmoji("🪙", Offset(30f, size.height * 0.42f), 40f, a)
-    if (rightHint) drawEmoji("🪙", Offset(size.width - 30f, size.height * 0.42f), 40f, a)
+    if (paperIcons != null) {
+        if (leftHint) drawPaperIcon(paperIcons, PaperIcon.COIN, Offset(22.dp.toPx(), size.height * 0.35f), 24.dp.toPx())
+        if (rightHint) drawPaperIcon(paperIcons, PaperIcon.COIN, Offset(size.width - 22.dp.toPx(), size.height * 0.35f), 24.dp.toPx())
+    } else {
+        if (leftHint) drawEmoji("🪙", Offset(30f, size.height * 0.42f), 40f, a)
+        if (rightHint) drawEmoji("🪙", Offset(size.width - 30f, size.height * 0.42f), 40f, a)
+    }
 }
 
 /** Вкладки мест: двор, дом, пруд, Марс. В местах с монетками — значок 🪙. */

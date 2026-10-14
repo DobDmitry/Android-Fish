@@ -32,6 +32,9 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -51,6 +54,14 @@ import com.dobdmitry.drawnpets.audio.Voice
 import com.dobdmitry.drawnpets.data.Creature
 import com.dobdmitry.drawnpets.data.Habitat
 import com.dobdmitry.drawnpets.ui.common.CoinBadge
+import com.dobdmitry.drawnpets.ui.common.PaperYardHeader
+import com.dobdmitry.drawnpets.ui.common.PaperArtwork
+import com.dobdmitry.drawnpets.ui.common.PaperCreatureCard
+import com.dobdmitry.drawnpets.ui.common.PaperYardActions
+import com.dobdmitry.drawnpets.ui.common.PaperYardHint
+import com.dobdmitry.drawnpets.ui.common.drawPaperOwl
+import com.dobdmitry.drawnpets.ui.common.drawPaperForeground
+import com.dobdmitry.drawnpets.ui.common.drawPaperPanArrow
 import com.dobdmitry.drawnpets.ui.common.CreatureInfoCard
 import com.dobdmitry.drawnpets.ui.common.EmojiButton
 import com.dobdmitry.drawnpets.ui.common.LocationTabs
@@ -108,11 +119,11 @@ private class LocationSpec(
 
 private val specs = mapOf(
     Habitat.YARD to LocationSpec(
-        R.drawable.bg_yard, 0.68f, 0.92f,
+        R.drawable.bg_yard_paper, 0.70f, 0.88f,
         listOf(
-            NpcSpot(Npc.OWL, 0.835f, 0.335f, 0.085f, true),
-            NpcSpot(Npc.RACCOON, 0.70f, 0.70f, 0.13f, false),
-            NpcSpot(Npc.HEDGEHOG, 0.24f, 0.67f, 0.085f, false),
+            NpcSpot(Npc.OWL, 0.35f, 0.66f, 0.23f, true),
+            NpcSpot(Npc.RACCOON, 0.86f, 0.67f, 0.18f, false),
+            NpcSpot(Npc.HEDGEHOG, 0.14f, 0.70f, 0.13f, false),
         ),
         start = 0.35f,
     ),
@@ -158,6 +169,12 @@ private fun LocationScene(
     onCare: (String) -> Unit,
 ) {
     val isPond = location == Habitat.POND
+    val isPaperYard = location == Habitat.YARD
+    val density = LocalDensity.current
+    var topChrome by remember { mutableStateOf(140.dp) }
+    var bottomChrome by remember { mutableStateOf(160.dp) }
+    val paperOwl = if (isPaperYard) ImageBitmap.imageResource(R.drawable.paper_owl) else null
+    val paperIcons = if (isPaperYard) ImageBitmap.imageResource(R.drawable.paper_icons) else null
     val spec = specs[location] ?: specs.getValue(Habitat.YARD)
     val state = vm.state
     val here = state.creatures.filter { it.habitat == location }
@@ -189,7 +206,9 @@ private fun LocationScene(
                 walkers.keys.retainAll(ids)
                 for (c in currentHere) {
                     val w = walkers.getOrPut(c.id) {
-                        Walker(0.1f + Random.nextFloat() * 0.8f, spec.minY + Random.nextFloat() * (spec.maxY - spec.minY))
+                        // First arrivals are visible in the opening viewport, rather than hidden offscreen.
+                        val x = if (isPaperYard) 0.43f + Random.nextFloat() * 0.12f else 0.1f + Random.nextFloat() * 0.8f
+                        Walker(x, spec.minY + Random.nextFloat() * (spec.maxY - spec.minY))
                     }
                     updateWalker(w, c, dt, spec)
                 }
@@ -211,6 +230,7 @@ private fun LocationScene(
         } else Canvas(
             Modifier
                 .fillMaxSize()
+                .then(if (isPaperYard) Modifier.padding(top = topChrome, bottom = bottomChrome).clipToBounds() else Modifier)
                 .scenePan(pan)
                 .pointerInput(Unit) {
                     detectTapGestures { pos ->
@@ -254,7 +274,9 @@ private fun LocationScene(
             val items = mutableListOf<SceneItem>()
             for (spot in spec.npcs) {
                 items += SceneItem(spot.y) {
-                    npcRects[spot.npc] = drawNpc(
+                    npcRects[spot.npc] = if (spot.npc == Npc.OWL && paperOwl != null) drawPaperOwl(
+                        paperOwl, Offset(pan.sx(spot.x), size.height * spot.y), size.height * spot.size, t,
+                    ) else drawNpc(
                         spot.npc, Offset(pan.sx(spot.x), size.height * spot.y),
                         size.height * spot.size, t, spot.facingLeft,
                     )
@@ -264,7 +286,7 @@ private fun LocationScene(
                 val w = walkers[c.id] ?: continue
                 items += SceneItem(w.y) {
                     val depth = 0.75f + (w.y - spec.minY) / (spec.maxY - spec.minY) * 0.35f
-                    val h = size.height * 0.15f * depth
+                    val h = size.height * (if (isPaperYard) 0.25f else 0.15f) * depth
                     var jump = if (w.jumpT >= 0f) sin(PI.toFloat() * w.jumpT / 0.5f) * h * 0.45f else 0f
                     // На Марсе притяжение слабое — персонажи прыгают высоко и плавно
                     if (spec.lowGravity && w.moving) jump += abs(sin(t * 3f + c.id.hashCode())) * h * 0.35f
@@ -276,19 +298,53 @@ private fun LocationScene(
                         action = if (c.sleeping) null else w.emote, actionTime = w.emoteT,
                     )
                     val labelColor = if (c.id == selectedId) Palette.Coral else Palette.Ink
-                    drawLabel(c.name, Offset(feet.x, feet.y + 34f), 34f, labelColor)
+                    val labelSize = if (isPaperYard) 13.sp.toPx() else 34f
+                    drawLabel(c.name, Offset(feet.x, feet.y + labelSize), labelSize, labelColor)
                     c.wish()?.let { if (!c.sleeping && (t + c.id.hashCode() % 7) % 7f < 2.5f) drawEmoji("💭", Offset(w.rect.right, w.rect.top), 44f) }
                 }
             }
             items.sortedBy { it.y }.forEach { it.draw(this) }
-            drawFieldCoins(coinsHere, pan, spec.minY, spec.maxY, t, coinRects)
+            drawFieldCoins(coinsHere, pan, spec.minY, spec.maxY, t, coinRects, paperIcons)
             drawParticles(particles)
+            if (isPaperYard) drawPaperForeground(t)
             // Подсказка, что сцену можно двигать: стрелки у краёв
             val a = 0.35f + 0.25f * sin(t * 3f)
-            if (pan.offset > 4f) drawEmoji("◀️", Offset(28f, size.height * 0.5f), 48f, a)
-            if (pan.offset < pan.worldW - pan.viewW - 4f) drawEmoji("▶️", Offset(size.width - 28f, size.height * 0.5f), 48f, a)
+            if (isPaperYard) {
+                if (pan.offset > 4f) drawPaperPanArrow(22.dp.toPx(), false, a + 0.3f)
+                if (pan.offset < pan.worldW - pan.viewW - 4f) drawPaperPanArrow(size.width - 22.dp.toPx(), true, a + 0.3f)
+            } else {
+                if (pan.offset > 4f) drawEmoji("◀️", Offset(28f, size.height * 0.5f), 48f, a)
+                if (pan.offset < pan.worldW - pan.viewW - 4f) drawEmoji("▶️", Offset(size.width - 28f, size.height * 0.5f), 48f, a)
+            }
         }
 
+        if (isPaperYard) {
+            PaperArtwork(requireNotNull(paperIcons)) {
+                Column(Modifier.fillMaxWidth().onSizeChanged { topChrome = with(density) { it.height.toDp() } }) {
+                    PaperYardHeader(state.coins, state.fieldCoins.map { it.location }.toSet(),
+                        onLocation = { vm.location = it }, onSettings = { showSettings = true })
+                }
+                if (state.creatures.size <= 2 && selectedId == null && openNpc == null) {
+                    PaperYardHint(Modifier.align(Alignment.TopCenter).padding(top = topChrome + 12.dp, start = 24.dp, end = 24.dp), onCreate)
+                }
+                LaunchedEffect(Unit) {
+                    if (!hintSpoken && state.creatures.size <= 2) {
+                        hintSpoken = true
+                        kotlinx.coroutines.delay(800)
+                        Voice.say("Твой рисунок может ожить! Нажми «Оживить рисунок».", pitch = Npc.OWL.voicePitch)
+                    }
+                }
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+                    val selected = selectedId?.let { state.creature(it) }
+                    if (selected != null) {
+                        PaperCreatureCard(selected, vm.bitmap(selected.id), onCare = { onCare(selected.id) }, onClose = { selectedId = null })
+                    }
+                    Column(Modifier.fillMaxWidth().onSizeChanged { bottomChrome = with(density) { it.height.toDp() } }) {
+                        PaperYardActions(onCreate, onGames, onShop, onAlbum)
+                    }
+                }
+            }
+        } else {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -327,24 +383,10 @@ private fun LocationScene(
                 onSelect = { h -> selectedId = null; vm.location = h },
                 coinsAt = state.fieldCoins.map { it.location }.toSet(),
             )
-            val showHint = location == Habitat.YARD && state.creatures.size <= 2 && selectedId == null && openNpc == null
-            LaunchedEffect(showHint) {
-                if (showHint && !hintSpoken) {
-                    hintSpoken = true
-                    kotlinx.coroutines.delay(800)
-                    Voice.say("Привет! Нарисуй персонажа на бумаге и нажми на кнопку с камерой. И он оживёт!", pitch = Npc.OWL.voicePitch)
-                }
-            }
             if (isPond && pondHint && selectedId == null && openNpc == null) {
                 SpeechBubble(
                     if (here.isEmpty()) "🐸 Ква! Нажми на воду, чтобы покормить рыбок. А ещё сюда можно поселить рисунки!"
                     else "🐸 Нажми на воду — рыбки приплывут за кормом!",
-                    Modifier.padding(horizontal = 24.dp, vertical = 6.dp),
-                )
-            }
-            if (showHint) {
-                SpeechBubble(
-                    "🦉 Нарисуй персонажа на бумаге и нажми «Рисунок» — он оживёт! Двигай картинку пальцем, чтобы осмотреться.",
                     Modifier.padding(horizontal = 24.dp, vertical = 6.dp),
                 )
             }
@@ -372,6 +414,8 @@ private fun LocationScene(
                 EmojiButton("🏪", "Лавка", color = Color(0xFFD8F5E6), onClick = onShop)
                 EmojiButton("📖", "Альбом", color = Color(0xFFEDE1FF), onClick = onAlbum)
             }
+        }
+
         }
 
         if (showSettings) SettingsDialog(onClose = { showSettings = false })
