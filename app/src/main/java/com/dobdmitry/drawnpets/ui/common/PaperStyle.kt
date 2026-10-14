@@ -38,10 +38,10 @@ import com.dobdmitry.drawnpets.data.Creature
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-private val PaperCream = Color(0xFFFFF5E2)
-private val PaperMint = Color(0xFFD4E4C5)
-private val PaperCoral = Color(0xFFE87958)
-private val PaperType = FontFamily(Font(R.font.nunito))
+internal val PaperCream = Color(0xFFFFF5E2)
+internal val PaperMint = Color(0xFFD4E4C5)
+internal val PaperCoral = Color(0xFFE87958)
+internal val PaperType = FontFamily(Font(R.font.nunito))
 private val LocalPaperAtlas = staticCompositionLocalOf<ImageBitmap> { error("Paper artwork is not provided") }
 
 @Composable
@@ -75,7 +75,7 @@ fun PaperIconView(icon: PaperIcon, modifier: Modifier = Modifier) {
 }
 
 /** Subtle deterministic paper flecks; drawn inside the clipped panel, without per-frame randomness. */
-private fun Modifier.paperSurface(color: Color = PaperCream, radius: Dp = 20.dp): Modifier {
+internal fun Modifier.paperSurface(color: Color = PaperCream, radius: Dp = 20.dp): Modifier {
     val shape = RoundedCornerShape(radius)
     return shadow(3.dp, shape).clip(shape).background(color).drawBehind {
         val step = 8.dp.toPx()
