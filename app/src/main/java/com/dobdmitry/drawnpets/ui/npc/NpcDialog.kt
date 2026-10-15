@@ -138,6 +138,7 @@ fun NpcDialog(
         ) {
             Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState())) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val npcArt = rememberNpcArtwork()
                     val time by rememberFrameTime()
                     Canvas(
                         Modifier
@@ -145,7 +146,7 @@ fun NpcDialog(
                             .clip(RoundedCornerShape(20.dp))
                             .background(Palette.SkyLight)
                     ) {
-                        drawNpc(npc, Offset(size.width / 2, size.height * 0.96f), size.height * 0.85f, time)
+                        drawNpc(npc, Offset(size.width / 2, size.height * 0.96f), size.height * 0.85f, time, art = npcArt)
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {

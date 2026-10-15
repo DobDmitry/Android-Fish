@@ -35,6 +35,7 @@ import com.dobdmitry.drawnpets.ui.care.CareIconView
 import com.dobdmitry.drawnpets.ui.common.*
 import com.dobdmitry.drawnpets.ui.npc.Npc
 import com.dobdmitry.drawnpets.ui.npc.drawNpc
+import com.dobdmitry.drawnpets.ui.npc.rememberNpcArtwork
 import kotlinx.coroutines.delay
 
 private data class ShopEntry(
@@ -159,10 +160,11 @@ fun ShopScreen(vm: GameViewModel, onBack: () -> Unit) {
 
 @Composable
 private fun Shopkeeper(modifier: Modifier) {
+    val npcArt = rememberNpcArtwork()
     // Reading frame time here keeps the product grid out of the animation's recompositions.
     val time = rememberFrameTime()
     Canvas(modifier) {
-        drawNpc(Npc.RACCOON, Offset(size.width / 2, size.height * 0.98f), size.height * 0.9f, time.value)
+        drawNpc(Npc.RACCOON, Offset(size.width / 2, size.height * 0.98f), size.height * 0.9f, time.value, art = npcArt)
     }
 }
 

@@ -89,7 +89,7 @@ internal fun Modifier.paperSurface(color: Color = PaperCream, radius: Dp = 20.dp
 }
 
 @Composable
-fun PaperYardHeader(coins: Int, coinsAt: Set<Habitat>, onLocation: (Habitat) -> Unit, onSettings: () -> Unit) {
+fun PaperYardHeader(coins: Int, coinsAt: Set<Habitat>, onLocation: (Habitat) -> Unit, onSettings: () -> Unit, selected: Habitat = Habitat.YARD) {
     Column(Modifier.fillMaxWidth().background(PaperCream).statusBarsPadding().padding(horizontal = 12.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Живые рисунки", Modifier.weight(1f), fontFamily = PaperType, color = Palette.Ink, fontSize = 20.sp,
@@ -121,8 +121,8 @@ fun PaperYardHeader(coins: Int, coinsAt: Set<Habitat>, onLocation: (Habitat) -> 
                     Habitat.POND -> PaperIcon.POND
                     Habitat.MARS -> PaperIcon.MARS
                 }
-                Column(Modifier.weight(1f).paperSurface(if (habitat == Habitat.YARD) PaperMint else PaperCream, 14.dp)
-                    .selectable(selected = habitat == Habitat.YARD, role = Role.Tab,
+                Column(Modifier.weight(1f).paperSurface(if (habitat == selected) PaperMint else PaperCream, 14.dp)
+                    .selectable(selected = habitat == selected, role = Role.Tab,
                         onClick = { Sounds.play(Sfx.TAP); onLocation(habitat) })
                     .padding(vertical = 5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box {

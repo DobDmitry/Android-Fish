@@ -47,6 +47,7 @@ import com.dobdmitry.drawnpets.ui.common.SpeechBubble
 import com.dobdmitry.drawnpets.ui.common.rememberFrameTime
 import com.dobdmitry.drawnpets.ui.npc.Npc
 import com.dobdmitry.drawnpets.ui.npc.drawNpc
+import com.dobdmitry.drawnpets.ui.npc.rememberNpcArtwork
 
 enum class MiniGame(
     val id: String,
@@ -78,6 +79,7 @@ fun GamesMenuScreen(
     onBack: () -> Unit,
     onPlay: (MiniGame, String?) -> Unit,
 ) {
+    val npcArt = rememberNpcArtwork()
     val state = vm.state
     var selected by remember { mutableStateOf(preselected ?: state.creatures.firstOrNull()?.id) }
     val player = selected?.let { state.creature(it) }
@@ -105,7 +107,7 @@ fun GamesMenuScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val time by rememberFrameTime()
                 Canvas(Modifier.size(96.dp)) {
-                    drawNpc(Npc.CAT, Offset(size.width / 2, size.height * 0.98f), size.height * 0.9f, time)
+                    drawNpc(Npc.CAT, Offset(size.width / 2, size.height * 0.98f), size.height * 0.9f, time, art = npcArt)
                 }
                 Spacer(Modifier.width(8.dp))
                 SpeechBubble(catSays, Modifier.weight(1f))

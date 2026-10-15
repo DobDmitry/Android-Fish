@@ -60,7 +60,9 @@ import com.dobdmitry.drawnpets.ui.common.drawParticles
 import com.dobdmitry.drawnpets.ui.common.step
 import com.dobdmitry.drawnpets.ui.npc.Npc
 import com.dobdmitry.drawnpets.ui.npc.NpcDialog
+import com.dobdmitry.drawnpets.ui.common.drawPaperPanArrow
 import com.dobdmitry.drawnpets.ui.npc.drawNpc
+import com.dobdmitry.drawnpets.ui.npc.rememberNpcArtwork
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.sin
@@ -68,7 +70,7 @@ import kotlin.random.Random
 
 private var frogSpoken = false
 
-private const val SURFACE = 0.24f
+private const val SURFACE = 0.30f
 private const val BOTTOM = 0.82f
 
 /** Пловец: и рыбки-NPC, и нарисованные персонажи. Координаты в пикселях. */
@@ -90,13 +92,13 @@ private class Pellet(var x: Float, var y: Float) {
 private data class FishLook(val body: Color, val fin: Color, val length: Float, val striped: Boolean)
 
 private val fishLooks = listOf(
-    FishLook(Color(0xFFFF9A3C), Color(0xFFFF6B3C), 0.16f, false),
-    FishLook(Color(0xFFFFD84D), Color(0xFFFFA62B), 0.11f, false),
-    FishLook(Color(0xFF6EC4FF), Color(0xFF2F7ED8), 0.15f, true),
-    FishLook(Color(0xFFFF8FB8), Color(0xFFE0507F), 0.12f, false),
-    FishLook(Color(0xFFB59CFF), Color(0xFF7A5CE0), 0.13f, true),
-    FishLook(Color(0xFFFF9A3C), Color(0xFFFFFFFF), 0.10f, true),
-    FishLook(Color(0xFF8BE07A), Color(0xFF3FA34D), 0.12f, false),
+    FishLook(Color(0xFFD99262), Color(0xFFB76B50), 0.16f, false),
+    FishLook(Color(0xFFE4C56F), Color(0xFFBF9754), 0.11f, false),
+    FishLook(Color(0xFF8BB5BC), Color(0xFF5F8B95), 0.15f, true),
+    FishLook(Color(0xFFD8A1A5), Color(0xFFB57880), 0.12f, false),
+    FishLook(Color(0xFFB4A4C2), Color(0xFF877296), 0.13f, true),
+    FishLook(Color(0xFFD99262), Color(0xFFFFFFFF), 0.10f, true),
+    FishLook(Color(0xFFA6BD83), Color(0xFF718A5E), 0.12f, false),
 )
 
 /**
@@ -111,6 +113,8 @@ fun PondScene(
     onFrog: () -> Unit,
     onFed: () -> Unit,
 ) {
+    val npcArt = rememberNpcArtwork()
+    val paperIcons = ImageBitmap.imageResource(R.drawable.paper_icons)
     val state = vm.state
     val pond = state.creatures.filter { it.habitat == Habitat.POND }
     val currentPond by rememberUpdatedState(pond)
@@ -124,7 +128,7 @@ fun PondScene(
     var time by remember { mutableFloatStateOf(0f) }
     val canvasSizeRef = remember { arrayOf(Size.Zero) }
     val pan = remember { ScenePan(0.4f) }
-    val background = ImageBitmap.imageResource(R.drawable.bg_pond)
+    val background = ImageBitmap.imageResource(R.drawable.bg_pond_paper)
     val frogRectRef = remember { arrayOf(Rect.Zero) }
     val coinRects = remember { mutableMapOf<Long, Rect>() }
     val coinsHere = state.fieldCoins.filter { it.location == Habitat.POND }
@@ -266,9 +270,9 @@ fun PondScene(
             val ox = pan.offset
             drawBubbles(t, bubbles, pan)
             // Квака на кувшинке с картинки
-            frogRectRef[0] = drawNpc(Npc.FROG, Offset(pan.sx(0.87f), size.height * 0.245f + sin(t * 1.5f) * 3f), size.height * 0.085f, t)
+            frogRectRef[0] = drawNpc(Npc.FROG, Offset(pan.sx(0.87f), size.height * SURFACE + sin(t * 1.5f) * 3f), size.height * 0.18f, t, art = npcArt)
             // краб на дне
-            drawEmoji("🦀", Offset(pan.sx(crabX - 0.1f), size.height * (BOTTOM + 0.06f) + sin(t * 10f) * 2f), size.width * 0.09f)
+            drawPaperCrab(Offset(pan.sx(crabX - 0.1f), size.height * (BOTTOM + 0.06f)), size.width * 0.10f, t)
             // корм
             for (p in pellets) drawCircle(Color(0xFFC98B55), 7f, Offset(p.x - ox, p.y))
             // рыбки
@@ -289,11 +293,11 @@ fun PondScene(
                 )
                 drawLabel(c.name, Offset(feet.x, feet.y + 30f), 30f, if (c.id == selectedId) Palette.Coral else Palette.Ink)
             }
-            drawFieldCoins(coinsHere, pan, BOTTOM + 0.02f, BOTTOM + 0.1f, t, coinRects)
+            drawFieldCoins(coinsHere, pan, BOTTOM + 0.02f, BOTTOM + 0.1f, t, coinRects, paperIcons)
             drawParticles(particles)
             val a = 0.35f + 0.25f * sin(t * 3f)
-            if (pan.offset > 4f) drawEmoji("◀️", Offset(28f, size.height * 0.5f), 48f, a)
-            if (pan.offset < pan.worldW - pan.viewW - 4f) drawEmoji("▶️", Offset(size.width - 28f, size.height * 0.5f), 48f, a)
+            if (pan.offset > 4f) drawPaperPanArrow(22.dp.toPx(), false, a + .3f)
+            if (pan.offset < pan.worldW - pan.viewW - 4f) drawPaperPanArrow(size.width - 22.dp.toPx(), true, a + .3f)
         }
 
     }
@@ -314,7 +318,7 @@ private fun DrawScope.drawBubbles(t: Float, bubbles: List<Offset>, pan: ScenePan
 }
 
 private fun DrawScope.drawFish(c: Offset, len: Float, look: FishLook, facingLeft: Boolean, t: Float) {
-    val ink = Palette.Ink
+    val ink = Color(0xFF65513E)
     scale(if (facingLeft) -1f else 1f, 1f, pivot = c) {
         val bodyH = len * 0.55f
         val wag = sin(t * 9f) * 18f
@@ -333,12 +337,18 @@ private fun DrawScope.drawFish(c: Offset, len: Float, look: FishLook, facingLeft
         // спинной плавник
         val fin = Path().apply {
             moveTo(c.x - len * 0.15f, c.y - bodyH * 0.4f)
-            quadraticBezierTo(c.x, c.y - bodyH * 0.95f, c.x + len * 0.15f, c.y - bodyH * 0.4f)
+            quadraticTo(c.x, c.y - bodyH * 0.95f, c.x + len * 0.15f, c.y - bodyH * 0.4f)
             close()
         }
         drawPath(fin, look.fin)
         drawPath(fin, ink, style = Stroke(2.5f))
         drawOval(look.body, Offset(c.x - len / 2, c.y - bodyH / 2), Size(len, bodyH))
+        // Fixed paper flecks stay inside the oval; no allocations or random shimmer per frame.
+        for (row in -2..2) for (col in -4..4) {
+            val u = col / 5f; val v = row / 3f
+            if (u*u + v*v < .85f) drawCircle(Color(0xFFFFF4D9).copy(alpha=.18f), len*.009f,
+                Offset(c.x + u*len*.5f, c.y + v*bodyH*.5f))
+        }
         if (look.striped) {
             for (k in 0..1) {
                 val x = c.x - len * 0.05f + k * len * 0.15f
@@ -351,4 +361,27 @@ private fun DrawScope.drawFish(c: Offset, len: Float, look: FishLook, facingLeft
         drawCircle(ink, len * 0.045f, Offset(eye.x + len * 0.015f, eye.y))
         drawArc(ink, -40f, 80f, false, Offset(c.x + len * 0.34f, c.y + bodyH * 0.02f), Size(len * 0.1f, len * 0.08f), style = Stroke(2f))
     }
+}
+
+private fun DrawScope.drawPaperCrab(c: Offset, w: Float, time: Float) {
+    val shell = Color(0xFFC97B60)
+    val ink = Color(0xFF70503C)
+    for (side in listOf(-1f, 1f)) {
+        for (leg in 0..2) {
+            val y = c.y + w * (.05f + leg*.11f)
+            val sway = sin(time*7f + leg)*w*.025f
+            drawLine(ink, Offset(c.x+side*w*.2f,y),Offset(c.x+side*w*.48f,y+w*.11f+sway),w*.045f,StrokeCap.Round)
+        }
+        val claw=Offset(c.x+side*w*.4f,c.y-w*.15f+sin(time*2f)*w*.025f)
+        drawLine(ink,Offset(c.x+side*w*.18f,c.y),claw,w*.055f,StrokeCap.Round)
+        drawArc(shell,30f,300f,true,Offset(claw.x-w*.15f,claw.y-w*.15f),Size(w*.3f,w*.3f))
+    }
+    drawOval(ink,Offset(c.x-w*.33f,c.y-w*.2f),Size(w*.66f,w*.45f))
+    drawOval(shell,Offset(c.x-w*.30f,c.y-w*.18f),Size(w*.60f,w*.4f))
+    for (side in listOf(-1f,1f)) {
+        val eye=Offset(c.x+side*w*.12f,c.y-w*.2f)
+        drawCircle(Color(0xFFFFF2D9),w*.065f,eye)
+        drawCircle(ink,w*.028f,eye)
+    }
+    for (i in -2..2) drawCircle(Color(0xFFE6B390),w*.018f,Offset(c.x+i*w*.09f,c.y+w*.04f))
 }

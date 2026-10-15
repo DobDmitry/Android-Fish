@@ -82,6 +82,7 @@ import com.dobdmitry.drawnpets.ui.common.step
 import com.dobdmitry.drawnpets.ui.npc.Npc
 import com.dobdmitry.drawnpets.ui.npc.NpcDialog
 import com.dobdmitry.drawnpets.ui.npc.drawNpc
+import com.dobdmitry.drawnpets.ui.npc.rememberNpcArtwork
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -122,19 +123,19 @@ private val specs = mapOf(
         R.drawable.bg_yard_paper, 0.70f, 0.88f,
         listOf(
             NpcSpot(Npc.OWL, 0.35f, 0.66f, 0.23f, true),
-            NpcSpot(Npc.RACCOON, 0.86f, 0.67f, 0.18f, false),
-            NpcSpot(Npc.HEDGEHOG, 0.14f, 0.70f, 0.13f, false),
+            NpcSpot(Npc.RACCOON, 0.86f, 0.67f, 0.21f, false),
+            NpcSpot(Npc.HEDGEHOG, 0.14f, 0.70f, 0.18f, false),
         ),
         start = 0.35f,
     ),
     Habitat.HOME to LocationSpec(
-        R.drawable.bg_home, 0.64f, 0.93f,
-        listOf(NpcSpot(Npc.CAT, 0.37f, 0.66f, 0.12f, false)),
+        R.drawable.bg_home_paper, 0.68f, 0.88f,
+        listOf(NpcSpot(Npc.CAT, 0.37f, 0.66f, 0.23f, false)),
         start = 0.45f,
     ),
     Habitat.MARS to LocationSpec(
-        R.drawable.bg_mars, 0.56f, 0.92f,
-        listOf(NpcSpot(Npc.ROBOT, 0.60f, 0.6f, 0.14f, true)),
+        R.drawable.bg_mars_paper, 0.65f, 0.88f,
+        listOf(NpcSpot(Npc.ROBOT, 0.60f, 0.63f, 0.23f, true)),
         start = 0.3f,
         lowGravity = true,
     ),
@@ -169,12 +170,11 @@ private fun LocationScene(
     onCare: (String) -> Unit,
 ) {
     val isPond = location == Habitat.POND
-    val isPaperYard = location == Habitat.YARD
+    val npcArt = rememberNpcArtwork()
     val density = LocalDensity.current
     var topChrome by remember { mutableStateOf(140.dp) }
     var bottomChrome by remember { mutableStateOf(160.dp) }
-    val paperOwl = if (isPaperYard) ImageBitmap.imageResource(R.drawable.paper_owl) else null
-    val paperIcons = if (isPaperYard) ImageBitmap.imageResource(R.drawable.paper_icons) else null
+    val paperIcons = ImageBitmap.imageResource(R.drawable.paper_icons)
     val spec = specs[location] ?: specs.getValue(Habitat.YARD)
     val state = vm.state
     val here = state.creatures.filter { it.habitat == location }
@@ -207,7 +207,7 @@ private fun LocationScene(
                 for (c in currentHere) {
                     val w = walkers.getOrPut(c.id) {
                         // First arrivals are visible in the opening viewport, rather than hidden offscreen.
-                        val x = if (isPaperYard) 0.43f + Random.nextFloat() * 0.12f else 0.1f + Random.nextFloat() * 0.8f
+                        val x = if (pan.worldW > 0f) pan.fx(pan.viewW * (0.35f + Random.nextFloat() * 0.3f)) else 0.5f
                         Walker(x, spec.minY + Random.nextFloat() * (spec.maxY - spec.minY))
                     }
                     updateWalker(w, c, dt, spec)
@@ -220,6 +220,7 @@ private fun LocationScene(
 
     Box(Modifier.fillMaxSize()) {
         if (isPond) {
+            Box(Modifier.fillMaxSize().padding(top = topChrome, bottom = bottomChrome).clipToBounds()) {
             PondScene(
                 vm = vm,
                 selectedId = selectedId,
@@ -227,10 +228,11 @@ private fun LocationScene(
                 onFrog = { openNpc = Npc.FROG },
                 onFed = { pondHint = false },
             )
+            }
         } else Canvas(
             Modifier
                 .fillMaxSize()
-                .then(if (isPaperYard) Modifier.padding(top = topChrome, bottom = bottomChrome).clipToBounds() else Modifier)
+                .padding(top = topChrome, bottom = bottomChrome).clipToBounds()
                 .scenePan(pan)
                 .pointerInput(Unit) {
                     detectTapGestures { pos ->
@@ -274,19 +276,15 @@ private fun LocationScene(
             val items = mutableListOf<SceneItem>()
             for (spot in spec.npcs) {
                 items += SceneItem(spot.y) {
-                    npcRects[spot.npc] = if (spot.npc == Npc.OWL && paperOwl != null) drawPaperOwl(
-                        paperOwl, Offset(pan.sx(spot.x), size.height * spot.y), size.height * spot.size, t,
-                    ) else drawNpc(
-                        spot.npc, Offset(pan.sx(spot.x), size.height * spot.y),
-                        size.height * spot.size, t, spot.facingLeft,
-                    )
+                    npcRects[spot.npc] = drawNpc(spot.npc, Offset(pan.sx(spot.x), size.height * spot.y),
+                        size.height * spot.size, t, spot.facingLeft, art = npcArt)
                 }
             }
             for (c in currentHere) {
                 val w = walkers[c.id] ?: continue
                 items += SceneItem(w.y) {
                     val depth = 0.75f + (w.y - spec.minY) / (spec.maxY - spec.minY) * 0.35f
-                    val h = size.height * (if (isPaperYard) 0.25f else 0.15f) * depth
+                    val h = size.height * 0.25f * depth
                     var jump = if (w.jumpT >= 0f) sin(PI.toFloat() * w.jumpT / 0.5f) * h * 0.45f else 0f
                     // На Марсе притяжение слабое — персонажи прыгают высоко и плавно
                     if (spec.lowGravity && w.moving) jump += abs(sin(t * 3f + c.id.hashCode())) * h * 0.35f
@@ -298,7 +296,7 @@ private fun LocationScene(
                         action = if (c.sleeping) null else w.emote, actionTime = w.emoteT,
                     )
                     val labelColor = if (c.id == selectedId) Palette.Coral else Palette.Ink
-                    val labelSize = if (isPaperYard) 13.sp.toPx() else 34f
+                    val labelSize = 13.sp.toPx()
                     drawLabel(c.name, Offset(feet.x, feet.y + labelSize), labelSize, labelColor)
                     c.wish()?.let { if (!c.sleeping && (t + c.id.hashCode() % 7) % 7f < 2.5f) drawEmoji("💭", Offset(w.rect.right, w.rect.top), 44f) }
                 }
@@ -306,33 +304,31 @@ private fun LocationScene(
             items.sortedBy { it.y }.forEach { it.draw(this) }
             drawFieldCoins(coinsHere, pan, spec.minY, spec.maxY, t, coinRects, paperIcons)
             drawParticles(particles)
-            if (isPaperYard) drawPaperForeground(t)
+            if (location == Habitat.YARD) drawPaperForeground(t)
             // Подсказка, что сцену можно двигать: стрелки у краёв
             val a = 0.35f + 0.25f * sin(t * 3f)
-            if (isPaperYard) {
-                if (pan.offset > 4f) drawPaperPanArrow(22.dp.toPx(), false, a + 0.3f)
-                if (pan.offset < pan.worldW - pan.viewW - 4f) drawPaperPanArrow(size.width - 22.dp.toPx(), true, a + 0.3f)
-            } else {
-                if (pan.offset > 4f) drawEmoji("◀️", Offset(28f, size.height * 0.5f), 48f, a)
-                if (pan.offset < pan.worldW - pan.viewW - 4f) drawEmoji("▶️", Offset(size.width - 28f, size.height * 0.5f), 48f, a)
-            }
+            if (pan.offset > 4f) drawPaperPanArrow(22.dp.toPx(), false, a + 0.3f)
+            if (pan.offset < pan.worldW - pan.viewW - 4f) drawPaperPanArrow(size.width - 22.dp.toPx(), true, a + 0.3f)
         }
 
-        if (isPaperYard) {
-            PaperArtwork(requireNotNull(paperIcons)) {
+        PaperArtwork(paperIcons) {
                 Column(Modifier.fillMaxWidth().onSizeChanged { topChrome = with(density) { it.height.toDp() } }) {
                     PaperYardHeader(state.coins, state.fieldCoins.map { it.location }.toSet(),
-                        onLocation = { vm.location = it }, onSettings = { showSettings = true })
+                        onLocation = { vm.location = it }, onSettings = { showSettings = true }, selected = location)
                 }
-                if (state.creatures.size <= 2 && selectedId == null && openNpc == null) {
+                if (location == Habitat.YARD && state.creatures.size <= 2 && selectedId == null && openNpc == null) {
                     PaperYardHint(Modifier.align(Alignment.TopCenter).padding(top = topChrome + 12.dp, start = 24.dp, end = 24.dp), onCreate)
                 }
                 LaunchedEffect(Unit) {
-                    if (!hintSpoken && state.creatures.size <= 2) {
+                    if (location == Habitat.YARD && !hintSpoken && state.creatures.size <= 2) {
                         hintSpoken = true
                         kotlinx.coroutines.delay(800)
                         Voice.say("Твой рисунок может ожить! Нажми «Оживить рисунок».", pitch = Npc.OWL.voicePitch)
                     }
+                }
+                if (isPond && pondHint && selectedId == null && openNpc == null) {
+                    SpeechBubble("Нажми на воду — рыбки приплывут за кормом!",
+                        Modifier.align(Alignment.TopCenter).padding(top = topChrome + 8.dp, start = 20.dp, end = 20.dp))
                 }
                 Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
                     val selected = selectedId?.let { state.creature(it) }
@@ -344,80 +340,6 @@ private fun LocationScene(
                     }
                 }
             }
-        } else {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-        ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "Живые рисунки",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Palette.Ink,
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(Color.White.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                CoinBadge(state.coins)
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    Modifier
-                        .size(42.dp)
-                        .background(Color.White, CircleShape)
-                        .clip(CircleShape)
-                        .clickable { Sounds.play(Sfx.TAP); showSettings = true },
-                    contentAlignment = Alignment.Center,
-                ) { Text("⚙️", fontSize = 22.sp) }
-            }
-            LocationTabs(
-                location,
-                onSelect = { h -> selectedId = null; vm.location = h },
-                coinsAt = state.fieldCoins.map { it.location }.toSet(),
-            )
-            if (isPond && pondHint && selectedId == null && openNpc == null) {
-                SpeechBubble(
-                    if (here.isEmpty()) "🐸 Ква! Нажми на воду, чтобы покормить рыбок. А ещё сюда можно поселить рисунки!"
-                    else "🐸 Нажми на воду — рыбки приплывут за кормом!",
-                    Modifier.padding(horizontal = 24.dp, vertical = 6.dp),
-                )
-            }
-        }
-
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .navigationBarsPadding()
-        ) {
-            val selected = selectedId?.let { state.creature(it) }
-            if (selected != null) {
-                CreatureInfoCard(selected, vm.bitmap(selected.id), onCare = { onCare(selected.id) }, onClose = { selectedId = null })
-            }
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Color.White.copy(alpha = 0.85f), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                EmojiButton("📷", "Рисунок", color = Palette.Lemon, onClick = onCreate)
-                EmojiButton("🎮", "Игры", color = Color(0xFFFFD6E5), onClick = onGames)
-                EmojiButton("🏪", "Лавка", color = Color(0xFFD8F5E6), onClick = onShop)
-                EmojiButton("📖", "Альбом", color = Color(0xFFEDE1FF), onClick = onAlbum)
-            }
-        }
-
-        }
-
         if (showSettings) SettingsDialog(onClose = { showSettings = false })
 
         openNpc?.let { npc ->
