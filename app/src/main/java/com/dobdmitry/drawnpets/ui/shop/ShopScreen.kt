@@ -183,7 +183,7 @@ private fun ShopCard(entry: ShopEntry, coins: Int, level: Int, atlas: ImageBitma
             .background(if (entry.isFood) Color(0xFFF4E9D2) else Color(0xFFE9E5EF)), contentAlignment = Alignment.Center) {
             val icon = if (entry.isFood) CareIcon.food(entry.id) else null
             if (icon != null) CareIconView(atlas, icon, Modifier.size(80.dp))
-            else Text(entry.emoji, fontSize = 50.sp, modifier = Modifier.clearAndSetSemantics { })
+            else OutfitIcon(entry.id, Modifier.size(80.dp))
         }
         Text(entry.name, Modifier.padding(top = 10.dp), fontFamily = PaperType, fontSize = 17.sp,
             fontWeight = FontWeight.ExtraBold, color = Palette.Ink, textAlign = TextAlign.Center)

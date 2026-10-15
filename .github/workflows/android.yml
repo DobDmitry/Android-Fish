@@ -19,7 +19,7 @@ jobs:
         run: |
           chmod +x gradlew
           set +e
-          ./gradlew assembleDebug 2>&1 | tee build.log
+          ./gradlew assembleDebug lintDebug testDebugUnitTest 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
           if [ $status -ne 0 ]; then
             echo "===== ERRORS ====="

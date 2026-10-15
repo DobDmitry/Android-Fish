@@ -242,7 +242,9 @@ fun DrawScope.drawCreature(
     return Rect(feet.x - w / 2, top, feet.x + w / 2, feet.y)
 }
 
-private val outfitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+private val outfitMatrix = android.graphics.Matrix()
+private val outfitBasis = FloatArray(9)
+
 
 /**
  * Рисует наряды в системе координат картинки (холст уже повёрнут и отмасштабирован),
@@ -257,19 +259,15 @@ private fun drawOutfit(canvas: android.graphics.Canvas, sprite: CreatureSprite, 
         if ((acc.slot == Slot.BACK) != back) continue
         val p = OutfitLayout.placement(item, rig) ?: continue
         val li = OutfitLayout.limbFor(item, p, rig)
-        if (li >= 0) anim.mapOnLimb(li, p.x, p.y, tmpPoint) else anim.map(p.x, p.y, tmpPoint)
-        drawEmojiAt(canvas, acc.emoji, tmpPoint[0], tmpPoint[1], p.size, p.rot, alpha)
+        val (ax, ay) = OutfitLayout.attachment(item, p)
+        // Transform the whole accessory around its attachment, keeping the grip on the hand.
+        anim.attachmentTransform(ax, ay, li, outfitBasis)
+        outfitMatrix.setValues(outfitBasis)
+        canvas.save()
+        canvas.concat(outfitMatrix)
+        OutfitArt.draw(canvas, acc.id, p.x, p.y, p.size, p.rot, alpha)
+        canvas.restore()
     }
-}
-
-/** Эмодзи с центром в (x, y) на «сыром» Android-холсте. */
-fun drawEmojiAt(canvas: android.graphics.Canvas, text: String, x: Float, y: Float, size: Float, rot: Float, alpha: Float = 1f) {
-    outfitPaint.textSize = size
-    outfitPaint.alpha = (alpha.coerceIn(0f, 1f) * 255).toInt()
-    canvas.save()
-    canvas.rotate(rot, x, y)
-    canvas.drawText(text, x, y + size * 0.35f, outfitPaint)
-    canvas.restore()
 }
 
 /** Частица, которая улетает вверх и тает: сердечки, звёзды, «+1». */

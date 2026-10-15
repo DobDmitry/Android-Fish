@@ -3,86 +3,95 @@ package com.dobdmitry.drawnpets.anim
 import com.dobdmitry.drawnpets.data.Catalog
 import com.dobdmitry.drawnpets.data.Slot
 import com.dobdmitry.drawnpets.data.WornItem
-import kotlin.math.abs
-import kotlin.math.hypot
-import kotlin.math.max
-import kotlin.math.min
+import kotlin.math.*
 
-/** Где и какого размера рисовать наряд (в пикселях картинки персонажа). */
 data class Placement(val x: Float, val y: Float, val size: Float, val rot: Float)
 
-/**
- * Расстановка нарядов по «скелету» рисунка: шляпа — на макушку, очки — на глаза,
- * шарф — под рот, шарик — в руку, рюкзак — за спину.
- */
+/** Coordinates remain artwork centres, preserving existing manually fitted saves. */
 object OutfitLayout {
+    /** Attachment point in the 100x100 artwork: brim, lens centre or handle. */
+    fun anchor(id: String): Pair<Float, Float> = when (id) {
+        "flower", "blossom", "bow", "star", "specs", "glasses", "mask", "ball", "butterfly", "rainbow" -> .5f to .5f
+        "bell", "scarf", "beads", "tie" -> .5f to .28f
+        "ribbon", "medal" -> .5f to .2f
+        "balloon", "sunflower", "lollipop", "umbrella" -> .5f to .9f
+        "party" -> .5f to .86f
+        "guitar" -> .55f to .38f
+        "crystal", "trophy" -> .5f to .87f
+        "backpack" -> .27f to .45f
+        else -> .5f to .82f
+    }
 
-    fun defaultPlacement(slot: Slot, rig: Rig): Placement {
-        val bodyW = max(1f, rig.right - rig.left)
-        val bodyH = max(1f, rig.bottom - rig.top)
-        val eyes = rig.eyes
-        val eyeX = if (eyes.isNotEmpty()) eyes.map { it.cx }.average().toFloat() else rig.headX
-        val eyeY = if (eyes.isNotEmpty()) eyes.map { it.cy }.average().toFloat() else rig.top + bodyH * 0.25f
-        val eyeSpan = if (eyes.size >= 2) abs(eyes.last().cx - eyes.first().cx) else 0f
-        return when (slot) {
+    private fun handLimb(rig: Rig): Limb? = rig.limbs.filter { it.kind == LimbKind.ARM }.let { arms ->
+        arms.filter { it.side > 0 }.maxByOrNull { it.length } ?: arms.maxByOrNull { it.length }
+    }
+
+    fun defaultPlacement(id: String, rig: Rig): Placement {
+        val slot = Catalog.accessory(id)?.slot ?: Slot.HEAD
+        val w = max(1f, rig.right - rig.left); val h = max(1f, rig.bottom - rig.top)
+        val eyes = rig.eyes.sortedBy { it.cx }
+        val left = eyes.firstOrNull(); val right = eyes.lastOrNull()
+        val span = if (eyes.size >= 2) hypot(right!!.cx - left!!.cx, right.cy - left.cy) else 0f
+        val eyeX = if (eyes.size >= 2) (left!!.cx + right!!.cx) / 2 else left?.cx ?: rig.headX
+        val eyeY = if (eyes.size >= 2) (left!!.cy + right!!.cy) / 2 else left?.cy ?: (rig.top + h * .25f)
+        val angle = if (span > 0f) Math.toDegrees(atan2((right!!.cy - left!!.cy).toDouble(), (right.cx - left.cx).toDouble())).toFloat() else 0f
+        val headWidth = (if (span > 0f) span * 2.2f else min(w, h * .7f) * .7f).coerceIn(w * .2f, w * .9f)
+        var size: Float
+        var x: Float
+        var y: Float
+        var rot = 0f
+        when (slot) {
             Slot.HEAD -> {
-                // ширина головы — по глазам, если они есть
-                val head = if (eyeSpan > 0f) eyeSpan * 2.2f else min(bodyW, bodyH * 0.7f) * 0.6f
-                val size = head.coerceIn(bodyW * 0.25f, bodyW * 0.75f)
-                Placement(rig.headX, rig.headY - size * 0.18f, size, 0f)
+                size = headWidth
+                x = rig.headX; y = rig.headY + headWidth * .04f
+                if (id in listOf("flower", "blossom", "bow")) { size *= .55f; x += headWidth * .25f }
+                if (id == "star") { size *= .55f; y -= size * .35f }
             }
             Slot.FACE -> {
-                val size = if (eyeSpan > 0f) eyeSpan * 1.9f else bodyW * 0.35f
-                Placement(eyeX, eyeY, size, 0f)
+                size = if (span > 0f) span * 2f else max((left?.rx ?: 0f) * 5f, w * .35f)
+                x = eyeX; y = eyeY; rot = angle
             }
             Slot.NECK -> {
-                val r = eyes.maxOfOrNull { it.ry } ?: 0f
-                val y = if (eyes.isNotEmpty()) min(rig.hipY - bodyH * 0.05f, eyeY + r + max(eyeSpan, bodyH * 0.12f) * 1.15f)
-                else rig.top + bodyH * 0.45f
-                val size = if (eyeSpan > 0f) eyeSpan * 1.1f else bodyW * 0.28f
-                Placement(eyeX, y, size.coerceAtLeast(bodyW * 0.15f), 0f)
+                size = headWidth * .65f; x = eyeX
+                y = if (eyes.isNotEmpty()) min(rig.hipY - h * .05f, eyeY + (eyes.maxOfOrNull { it.ry } ?: 0f) + max(span, h * .12f) * 1.15f)
+                    else rig.top + h * .45f
             }
             Slot.HAND -> {
-                val size = (bodyH * 0.3f).coerceAtMost(bodyW * 0.6f)
-                val arm = handLimb(rig)
-                if (arm != null) Placement(arm.tx, arm.ty - size * 0.25f, size, 0f)
-                else Placement(rig.right - bodyW * 0.05f, rig.top + bodyH * 0.5f, size, 0f)
+                size = min(h * .4f, w * .7f)
+                val hand = handLimb(rig)
+                x = hand?.tx ?: (rig.right - w * .05f); y = hand?.ty ?: (rig.top + h * .55f)
             }
             Slot.BACK -> {
-                // ширину берём без раскинутых рук
-                val size = min(bodyW * 0.8f, bodyH * 0.6f)
-                Placement(rig.cx, rig.top + bodyH * 0.42f, size, 0f)
+                size = when (id) { "backpack" -> min(w * .6f, h * .6f); else -> max(w * 1.18f, h * .75f) }
+                x = if (id == "backpack") rig.right - size * .25f else rig.cx
+                y = rig.top + h * .43f
             }
         }
+        val (ax, ay) = anchor(id)
+        val a = Math.toRadians(rot.toDouble()); val dx = (.5f - ax) * size; val dy = (.5f - ay) * size
+        return Placement(x + dx * cos(a).toFloat() - dy * sin(a).toFloat(),
+            y + dx * sin(a).toFloat() + dy * cos(a).toFloat(), size, rot)
     }
 
-    /** Рука, в которую по умолчанию кладём предмет: правая, если есть. */
-    private fun handLimb(rig: Rig): Limb? {
-        val arms = rig.limbs.filter { it.kind == LimbKind.ARM }
-        return arms.filter { it.side > 0 }.maxByOrNull { it.length } ?: arms.maxByOrNull { it.length }
-    }
-
-    /** Место надетой вещи: своё (если подгоняли) или по умолчанию. */
     fun placement(item: WornItem, rig: Rig): Placement? {
-        val acc = Catalog.accessory(item.id) ?: return null
-        val x = item.x; val y = item.y; val size = item.size
-        return if (x != null && y != null && size != null) Placement(x, y, size, item.rot)
-        else defaultPlacement(acc.slot, rig).copy(rot = item.rot)
+        if (Catalog.accessory(item.id) == null) return null
+        return if (item.custom) Placement(item.x!!, item.y!!, item.size!!, item.rot)
+        else defaultPlacement(item.id, rig).let { it.copy(rot = it.rot + item.rot) }
     }
 
-    /**
-     * Предмет «в руку» двигается вместе с ближайшей конечностью, если лежит
-     * у её кончика. Остальные наряды двигаются вместе с телом.
-     */
+    fun attachment(item: WornItem, p: Placement): Pair<Float, Float> {
+        val (ax, ay) = anchor(item.id)
+        val dx = (ax - .5f) * p.size; val dy = (ay - .5f) * p.size
+        val a = Math.toRadians(p.rot.toDouble())
+        return (p.x + dx * cos(a).toFloat() - dy * sin(a).toFloat()) to
+            (p.y + dx * sin(a).toFloat() + dy * cos(a).toFloat())
+    }
+
     fun limbFor(item: WornItem, p: Placement, rig: Rig): Int {
         if (Catalog.accessory(item.id)?.slot != Slot.HAND) return -1
-        var best = -1
-        var bestD = max(rig.right - rig.left, rig.bottom - rig.top) * 0.3f
-        rig.limbs.forEachIndexed { i, l ->
-            if (l.kind == LimbKind.LEG) return@forEachIndexed
-            val d = hypot(l.tx - p.x, l.ty - p.y)
-            if (d < bestD) { bestD = d; best = i }
-        }
-        return best
+        val (x, y) = attachment(item, p)
+        return rig.limbs.indices.filter { rig.limbs[it].kind == LimbKind.ARM }
+            .minByOrNull { hypot(rig.limbs[it].tx - x, rig.limbs[it].ty - y) }
+            ?.takeIf { hypot(rig.limbs[it].tx - x, rig.limbs[it].ty - y) < max(rig.right-rig.left, rig.bottom-rig.top) * .3f } ?: -1
     }
 }

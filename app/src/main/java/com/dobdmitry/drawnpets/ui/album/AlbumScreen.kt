@@ -136,9 +136,11 @@ private fun AlbumCard(creature: Creature, bitmap: ImageBitmap?, onClick: () -> U
                 fontFamily = PaperType, fontSize = 13.sp, color = Palette.Ink)
         }
         Text(mood, fontFamily = PaperType, fontSize = 13.sp, color = Palette.Ink, textAlign = TextAlign.Center)
-        if (accessories.isNotEmpty()) Text(accessories.joinToString(" ") { it.emoji },
-            Modifier.padding(top = 4.dp).clearAndSetSemantics { contentDescription = "Наряды: ${accessories.joinToString { it.name }}" },
-            fontSize = 20.sp, textAlign = TextAlign.Center)
+        if (accessories.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(top = 4.dp)
+            .clearAndSetSemantics { contentDescription = "Наряды: ${accessories.joinToString { it.name }}" },
+            horizontalArrangement = Arrangement.Center) {
+            accessories.forEach { OutfitIcon(it.id, Modifier.weight(1f).height(28.dp)) }
+        }
         Text(wish ?: "Навестить", Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(10.dp))
             .background(if (wish != null) Color(0xFFF6DECA) else PaperMint).padding(10.dp),
             fontFamily = PaperType, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, textAlign = TextAlign.Center)

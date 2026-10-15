@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -55,7 +56,9 @@ import com.dobdmitry.drawnpets.ui.common.Palette
 import com.dobdmitry.drawnpets.ui.common.PillButton
 import com.dobdmitry.drawnpets.ui.common.ScreenHeader
 import com.dobdmitry.drawnpets.ui.common.drawCreature
-import com.dobdmitry.drawnpets.ui.common.drawEmojiAt
+import com.dobdmitry.drawnpets.ui.common.OutfitArt
+import com.dobdmitry.drawnpets.ui.common.OutfitIcon
+import com.dobdmitry.drawnpets.ui.common.PaperCream
 import com.dobdmitry.drawnpets.ui.common.rememberFrameTime
 import kotlin.math.max
 import kotlin.math.min
@@ -109,7 +112,7 @@ fun OutfitScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit) {
                 selected = acc.id
             }
             acc.minLevel > creature.level -> {
-                message = "${acc.emoji} можно надеть с ${acc.minLevel}-го уровня. У ${creature.name} сейчас ${creature.level}-й."
+                message = "${acc.name} можно надеть с ${acc.minLevel}-го уровня. У ${creature.name} сейчас ${creature.level}-й."
                 Sounds.play(Sfx.WRONG)
             }
             acc.id !in vm.state.ownedAccessories -> {
@@ -136,7 +139,7 @@ fun OutfitScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFFFFF4FA))
+            .background(PaperCream)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -209,7 +212,7 @@ fun OutfitScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit) {
                     val acc = Catalog.accessory(w.id) ?: return
                     val p = OutfitLayout.placement(w, rig) ?: return
                     val c = f.toScreen(p.x, p.y)
-                    drawEmojiAt(canvas, acc.emoji, c.x, c.y, p.size * f.scale, p.rot)
+                    OutfitArt.draw(canvas, acc.id, c.x, c.y, p.size * f.scale, p.rot)
                 }
                 items.filter { Catalog.accessory(it.id)?.slot == Slot.BACK }.forEach { drawItem(it) }
                 drawImage(
@@ -248,8 +251,8 @@ fun OutfitScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit) {
                     .padding(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                SmallBtn("−") { editSelected { it.copy(size = (it.size ?: 50f) / 1.12f) } }
-                SmallBtn("+") { editSelected { it.copy(size = (it.size ?: 50f) * 1.12f) } }
+                SmallBtn("−") { editSelected { it.copy(size = ((it.size ?: 50f) / 1.12f).coerceIn(bw * 0.05f, bw * 1.6f)) } }
+                SmallBtn("+") { editSelected { it.copy(size = ((it.size ?: 50f) * 1.12f).coerceIn(bw * 0.05f, bw * 1.6f)) } }
                 SmallBtn("⟲") { editSelected { it.copy(rot = it.rot - 10f) } }
                 SmallBtn("⟳") { editSelected { it.copy(rot = it.rot + 10f) } }
                 SmallBtn("↺ На место") { items = items.map { if (it.id == sel) WornItem(it.id) else it } }
@@ -272,7 +275,7 @@ fun OutfitScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit) {
                 val on = s == slot
                 val worn = items.firstOrNull { Catalog.accessory(it.id)?.slot == s }
                 Text(
-                    "${worn?.let { Catalog.accessory(it.id)?.emoji } ?: s.emoji} ${s.title}",
+                    "${s.title}${if (worn != null) " ✓" else ""}",
                     fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Palette.Ink,
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
@@ -297,7 +300,7 @@ fun OutfitScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit) {
                 val locked = acc.minLevel > creature.level
                 Column(
                     Modifier
-                        .width(72.dp)
+                        .width(100.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(
                             when {
@@ -312,9 +315,10 @@ fun OutfitScreen(vm: GameViewModel, creatureId: String, onBack: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text(acc.emoji, fontSize = 30.sp, modifier = Modifier.padding(2.dp))
+                        OutfitIcon(acc.id, Modifier.size(48.dp).padding(2.dp))
                         if (locked) Text("🔒", fontSize = 16.sp, modifier = Modifier.align(Alignment.BottomEnd))
                     }
+                    Text(acc.name, fontSize = 12.sp, color = Palette.Ink, textAlign = TextAlign.Center)
                     Text(
                         when {
                             locked -> "ур. ${acc.minLevel}"
@@ -357,6 +361,6 @@ private fun SmallBtn(text: String, onClick: () -> Unit) {
             .background(Color.White)
             .border(2.dp, Palette.Ink.copy(alpha = 0.35f), RoundedCornerShape(50))
             .clickable { Sounds.play(Sfx.TAP); onClick() }
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .heightIn(min = 48.dp).padding(horizontal = 14.dp, vertical = 8.dp),
     )
 }

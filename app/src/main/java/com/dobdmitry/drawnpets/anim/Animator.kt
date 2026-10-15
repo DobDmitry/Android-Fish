@@ -169,6 +169,23 @@ class Animator(val rig: Rig) {
         mapFrom(x0, y0, x, y, out)
     }
 
+    private val attachmentOrigin = FloatArray(2)
+    private val attachmentX = FloatArray(2)
+    private val attachmentY = FloatArray(2)
+
+    /** Local affine transform around an accessory attachment; includes limb rotation. */
+    fun attachmentTransform(x: Float, y: Float, limb: Int, out: FloatArray) {
+        fun sample(px: Float, py: Float, target: FloatArray) {
+            if (limb >= 0) mapOnLimb(limb, px, py, target) else map(px, py, target)
+        }
+        sample(x,y,attachmentOrigin); sample(x+1f,y,attachmentX); sample(x,y+1f,attachmentY)
+        val xx=attachmentX[0]-attachmentOrigin[0]; val xy=attachmentX[1]-attachmentOrigin[1]
+        val yx=attachmentY[0]-attachmentOrigin[0]; val yy=attachmentY[1]-attachmentOrigin[1]
+        out[0]=xx; out[1]=yx; out[2]=attachmentOrigin[0]-xx*x-yx*y
+        out[3]=xy; out[4]=yy; out[5]=attachmentOrigin[1]-xy*x-yy*y
+        out[6]=0f; out[7]=0f; out[8]=1f
+    }
+
     /** Деформация тела: (x0, y0) — исходная точка (для весов), (x, y) — уже сдвинутая конечностью. */
     private fun mapFrom(x0: Float, y0: Float, xs: Float, ys: Float, out: FloatArray) {
         var x = xs
