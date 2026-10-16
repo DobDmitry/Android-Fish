@@ -59,6 +59,7 @@ private const val BALLOON_TIME = 40f
 
 @Composable
 fun BalloonGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
+    val art = rememberStoryArtwork()
     val finish by rememberUpdatedState(onFinish)
     val friends = remember { vm.state.creatures.mapNotNull { vm.bitmap(it.id) } }
     val balloons = remember { mutableListOf<Balloon>() }
@@ -145,10 +146,10 @@ fun BalloonGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
         ) {
             sizeRef[0] = size
             val t = time
-            drawGamePaper(t, .95f)
+            drawStoryScene(art, 3)
             for (b in balloons) {
                 val bx = b.x + sin(t * 2f + b.phase) * 12f
-                drawBalloon(Offset(bx, b.y), size.width * 0.09f, b, t)
+                drawBalloon(art, Offset(bx, b.y), size.width * 0.09f, b, t)
             }
             drawParticles(particles)
         }
@@ -156,25 +157,18 @@ fun BalloonGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
     }
 }
 
-private fun DrawScope.drawBalloon(c: Offset, r: Float, b: Balloon, t: Float) {
+private fun DrawScope.drawBalloon(art: StoryArtwork, c: Offset, r: Float, b: Balloon, t: Float) {
     if (b.kind == BalloonKind.STORM) {
-        drawGameToken("⛈️", c, r * 2.2f)
+        drawGameToken(art, "⛈️", c, r * 2.2f)
         return
     }
-    val color = if (b.kind == BalloonKind.GOLD) Color(0xFFE0B45C) else b.color
     // ниточка
     val string = Path().apply {
         moveTo(c.x, c.y + r * 1.2f)
-        quadraticBezierTo(c.x + sin(t * 3f + b.phase) * 10f, c.y + r * 1.8f, c.x, c.y + r * 2.5f)
+        quadraticTo(c.x + sin(t * 3f + b.phase) * 10f, c.y + r * 1.8f, c.x, c.y + r * 2.5f)
     }
     drawPath(string, Palette.Ink.copy(alpha = 0.7f), style = Stroke(2.5f))
-    val knot = Path().apply {
-        moveTo(c.x, c.y + r * 1.15f); lineTo(c.x - r * 0.12f, c.y + r * 1.3f); lineTo(c.x + r * 0.12f, c.y + r * 1.3f); close()
-    }
-    drawPath(knot, color)
-    drawOval(color, Offset(c.x - r, c.y - r * 1.2f), Size(r * 2, r * 2.4f))
-    drawOval(Palette.Ink.copy(alpha = 0.7f), Offset(c.x - r, c.y - r * 1.2f), Size(r * 2, r * 2.4f), style = Stroke(3f))
-    drawOval(GamePaper.copy(alpha = 0.35f), Offset(c.x - r * 0.6f, c.y - r * 0.9f), Size(r * 0.45f, r * 0.7f))
+    drawStoryItem(art, 15, c, Size(r * 2, r * 2.4f))
     val img = b.friend
     if (img != null) {
         val s = r * 1.4f
@@ -187,5 +181,5 @@ private fun DrawScope.drawBalloon(c: Offset, r: Float, b: Balloon, t: Float) {
             IntSize(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1)),
         )
     }
-    if (b.kind == BalloonKind.GOLD) drawGameToken("⭐", c, r)
+    if (b.kind == BalloonKind.GOLD) drawGameToken(art, "⭐", c, r)
 }

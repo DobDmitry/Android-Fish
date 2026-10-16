@@ -87,6 +87,7 @@ private class HideState {
 
 @Composable
 fun HideSeekGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) -> Unit) {
+    val art = rememberStoryArtwork()
     val finish by rememberUpdatedState(onFinish)
     val st = remember { HideState() }
     var time by remember { mutableFloatStateOf(0f) }
@@ -166,10 +167,8 @@ fun HideSeekGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int
             val t = time
             val w = size.width
             val h = size.height
-            drawGamePaper(t, .3f)
-            drawRect(Brush.verticalGradient(listOf(Color(0xFFB5C39A), GameSage), h * 0.3f, h), Offset(0f, h * 0.3f), Size(w, h * 0.7f))
+            drawStoryScene(art, 5)
             val r = w * 0.14f
-            drawPaperGrain()
             val ch = w * 0.24f
             val hidden = st.hideBush
 
@@ -193,7 +192,7 @@ fun HideSeekGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int
                     drawCreature(sprite, Offset(c.x, c.y - r * 0.2f), ch, t, jump = ch * 0.55f * k, outfit = outfit, shadow = false, action = if (st.phase == HidePhase.FOUND) Action.HAPPY else Action.WAVE, actionTime = st.timer)
                 }
                 val rustle = st.phase == HidePhase.GUESS && i == hidden && st.round <= 2 && (t % 2.2f) < 0.35f
-                drawBush(c, r, if (rustle) sin(t * 40f) * 5f else 0f)
+                drawBush(art, c, r, if (rustle) sin(t * 40f) * 5f else 0f)
                 if (i == st.wrongBush && st.phase == HidePhase.MISSED) {
                     drawLabel("Пусто!", Offset(c.x, c.y - r * 1.6f), 42f, Color(0xFF8A5A3B))
                 }
@@ -214,26 +213,6 @@ fun HideSeekGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int
     }
 }
 
-private fun DrawScope.drawBush(c: Offset, r: Float, shake: Float) {
-    val ink = Palette.Ink
-    val parts = listOf(
-        Offset(-0.55f, -0.35f) to 0.55f,
-        Offset(0.55f, -0.35f) to 0.55f,
-        Offset(0f, -0.75f) to 0.65f,
-        Offset(-0.25f, -0.25f) to 0.6f,
-        Offset(0.3f, -0.2f) to 0.55f,
-    )
-    for ((o, k) in parts) {
-        val p = Offset(c.x + o.x * r + shake, c.y + o.y * r)
-        drawCircle(ink, r * k + 3f, p)
-    }
-    for ((o, k) in parts) {
-        val p = Offset(c.x + o.x * r + shake, c.y + o.y * r)
-        drawCircle(Color(0xFF8B9F72), r * k, p)
-    }
-    drawCircle(Color(0xFFB4C399), r * 0.3f, Offset(c.x - r * 0.25f + shake, c.y - r * 0.85f))
-    for (i in 0 until 3) {
-        drawCircle(Color(0xFFD98B72), r * 0.07f, Offset(c.x + (i - 1) * r * 0.45f + shake, c.y - r * (0.35f + (i % 2) * 0.3f)))
-    }
-    drawOval(Color.Black.copy(alpha = 0.12f), Offset(c.x - r, c.y - r * 0.1f), Size(r * 2, r * 0.3f))
+private fun DrawScope.drawBush(art: StoryArtwork, c: Offset, r: Float, shake: Float) {
+    drawStoryItem(art, 14, Offset(c.x + shake, c.y - r * .55f), Size(r * 2.2f, r * 1.7f))
 }

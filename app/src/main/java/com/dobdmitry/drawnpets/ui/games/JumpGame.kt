@@ -54,6 +54,7 @@ private class JumpState {
 
 @Composable
 fun JumpGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) -> Unit) {
+    val art = rememberStoryArtwork()
     val st = remember { JumpState() }
     var time by remember { mutableFloatStateOf(0f) }
     var score by remember { mutableIntStateOf(0) }
@@ -150,28 +151,9 @@ fun JumpGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) ->
             val w = size.width
             val h = size.height
             val ground = h * 0.78f
-            drawGamePaper(t, ground / h)
-            // параллакс: облака и холмы
-            for (i in 0 until 3) {
-                val cx = w + 100f - ((st.distance * 0.1f + i * w * 0.5f) % (w + 200f))
-                drawCircle(Color.White, w * 0.06f, Offset(cx, h * (0.2f + i * 0.07f)))
-                drawCircle(Color.White, w * 0.045f, Offset(cx + w * 0.06f, h * (0.21f + i * 0.07f)))
-            }
-            for (i in 0 until 3) {
-                val hx = w * 1.4f - ((st.distance * 0.3f + i * w * 0.7f) % (w * 2.1f))
-                drawOval(Color(0xFFB5C39A), Offset(hx - w * 0.4f, ground - h * 0.12f), Size(w * 0.8f, h * 0.25f))
-            }
-            drawRect(GameSage, Offset(0f, ground), Size(w, h - ground))
-            // полоски земли
-            val stripe = w * 0.15f
-            val shift = st.distance % stripe
-            var x = -shift
-            while (x < w) {
-                drawRect(GameInk.copy(alpha=.16f), Offset(x, ground + h * 0.03f), Size(stripe * 0.4f, h * 0.012f))
-                x += stripe
-            }
-            for (c in st.coins) drawGameToken("🪙", Offset(c.x, c.y), w * 0.08f)
-            for (o in st.obstacles) drawGameToken(o.emoji, Offset(o.x, ground - w * 0.06f), w * 0.12f)
+            drawStoryScene(art, 1)
+            for (c in st.coins) drawGameToken(art, "🪙", Offset(c.x, c.y), w * 0.08f)
+            for (o in st.obstacles) drawGameToken(art, o.emoji, Offset(o.x, ground - w * 0.06f), w * 0.12f)
             val blink = st.hurt > 0f && (t * 12f).toInt() % 2 == 0
             drawCreature(
                 sprite = sprite, feet = Offset(w * 0.22f, ground), height = w * 0.22f, time = t,

@@ -16,33 +16,10 @@ internal val GameInk = Color(0xFF655442)
 internal val GameSage = Color(0xFFA8B88B)
 internal val GameRose = Color(0xFFD98B72)
 
-/** Quiet paper layers leave the active play area readable. */
-internal fun DrawScope.drawGamePaper(t: Float = 0f, ground: Float = .9f) {
-    drawRect(Color(0xFFD5E2DA))
-    for (i in 0..3) {
-        val x = ((i * .34f + t * .006f) % 1.4f - .2f) * size.width
-        val y = size.height * (.18f + (i % 2) * .12f)
-        drawOval(GameInk.copy(alpha=.08f), Offset(x+3f,y+4f), Size(size.width*.36f,size.height*.055f))
-        drawOval(GamePaper, Offset(x,y), Size(size.width*.36f,size.height*.055f))
-    }
-    drawOval(GameSage.copy(alpha=.55f), Offset(-size.width*.3f,size.height*(ground-.1f)), Size(size.width*1.3f,size.height*.3f))
-    drawRect(GamePaper, Offset(0f,size.height*ground), Size(size.width,size.height*(1f-ground)))
-    drawLine(GameInk.copy(alpha=.22f), Offset(0f,size.height*ground),Offset(size.width,size.height*ground),2f)
-    drawPaperGrain()
-}
-
-internal fun DrawScope.drawPaperGrain() {
-    // Fixed coordinates prevent flicker and avoid allocations/randomness each frame.
-    repeat(180) { i ->
-        val x = ((i * 73) % 997) / 997f * size.width
-        val y = ((i * 139) % 991) / 991f * size.height
-        drawLine(GameInk.copy(alpha=.055f), Offset(x,y), Offset(x+2f,y+1f),1f)
-    }
-}
-
 @Composable
 internal fun GameToken(token: String, modifier: Modifier) {
-    Canvas(modifier) { drawGameToken(token, center, minOf(size.width,size.height)*.9f) }
+    val art = rememberStoryArtwork()
+    Canvas(modifier) { drawGameToken(art, token, center, minOf(size.width,size.height)*.9f) }
 }
 
 /** Cut-paper pieces share one outline and palette instead of platform emoji artwork. */

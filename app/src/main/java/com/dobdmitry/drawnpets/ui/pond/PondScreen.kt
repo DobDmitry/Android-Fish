@@ -79,6 +79,7 @@ private class Swimmer(var x: Float, var y: Float) {
     var tx = x
     var ty = y
     var facingLeft = false
+    var facingBlend = 1f
     var speed = 60f + Random.nextFloat() * 50f
     var rect = Rect.Zero
     var phase = Random.nextFloat() * 10f
@@ -90,17 +91,7 @@ private class Pellet(var x: Float, var y: Float) {
     var age = 0f
 }
 
-private data class FishLook(val body: Color, val fin: Color, val length: Float, val striped: Boolean)
-
-private val fishLooks = listOf(
-    FishLook(Color(0xFFD99262), Color(0xFFB76B50), 0.16f, false),
-    FishLook(Color(0xFFE4C56F), Color(0xFFBF9754), 0.11f, false),
-    FishLook(Color(0xFF8BB5BC), Color(0xFF5F8B95), 0.15f, true),
-    FishLook(Color(0xFFD8A1A5), Color(0xFFB57880), 0.12f, false),
-    FishLook(Color(0xFFB4A4C2), Color(0xFF877296), 0.13f, true),
-    FishLook(Color(0xFFD99262), Color(0xFFFFFFFF), 0.10f, true),
-    FishLook(Color(0xFFA6BD83), Color(0xFF718A5E), 0.12f, false),
-)
+private val fishLengths = listOf(.16f, .11f, .15f, .12f, .13f, .10f, .12f)
 
 /**
  * Сцена пруда: рыбки, корм, пузырьки и нарисованные жители. Шапка, вкладки
@@ -114,6 +105,7 @@ fun PondScene(
     onFrog: () -> Unit,
     onFed: () -> Unit,
 ) {
+    val fishArt = rememberStoryFish()
     val npcArt = rememberNpcArtwork()
     val paperIcons = ImageBitmap.imageResource(R.drawable.paper_icons)
     val state = vm.state
@@ -150,7 +142,7 @@ fun PondScene(
                 val sz = canvasSizeRef[0]
                 if (sz.width > 0f) {
                     if (fish.isEmpty()) {
-                        repeat(fishLooks.size) {
+                        repeat(fishLengths.size) {
                             fish += Swimmer(sz.width * Random.nextFloat(), sz.height * (0.35f + Random.nextFloat() * 0.45f))
                                 .also { s -> randomTarget(s, sz) }
                         }
@@ -200,7 +192,11 @@ fun PondScene(
                             if (abs(dx) > 3f) s.facingLeft = dx < 0
                         }
                     }
-                    fish.forEach { swim(it) {} }
+                    fish.forEach {
+                        swim(it) {}
+                        val targetFacing = if (it.facingLeft) -1f else 1f
+                        it.facingBlend += (targetFacing - it.facingBlend) * (1f - kotlin.math.exp(-dt * 7f))
+                    }
                     for (c in currentPond) {
                         val s = creatures[c.id] ?: continue
                         if (s.happyT >= 0f) {
@@ -279,8 +275,7 @@ fun PondScene(
             for (p in pellets) drawCircle(Color(0xFFC98B55), 7f, Offset(p.x - ox, p.y))
             // рыбки
             fish.forEachIndexed { i, s ->
-                val look = fishLooks[i % fishLooks.size]
-                drawFish(Offset(s.x - ox, s.y), size.width * look.length, look, s.facingLeft, t + s.phase)
+                fishArt[i % fishArt.size].draw(this, Offset(s.x - ox, s.y), size.width * fishLengths[i] * 1.2f, s.facingBlend, t + s.phase)
             }
             // нарисованные жители
             for (c in currentPond) {
@@ -316,52 +311,6 @@ private fun DrawScope.drawBubbles(t: Float, bubbles: List<Offset>, pan: ScenePan
         val yy = surface + (bottom - surface) * y
         val xx = pan.sx(b.x) + sin(t * 2f + i) * 8f
         drawCircle(Color.White.copy(alpha = 0.5f), 5f + (i % 3) * 3f, Offset(xx, yy), style = Stroke(2.5f))
-    }
-}
-
-private fun DrawScope.drawFish(c: Offset, len: Float, look: FishLook, facingLeft: Boolean, t: Float) {
-    val ink = Color(0xFF65513E)
-    scale(if (facingLeft) -1f else 1f, 1f, pivot = c) {
-        val bodyH = len * 0.55f
-        val wag = sin(t * 9f) * 18f
-        // хвост
-        rotate(wag, pivot = Offset(c.x - len * 0.38f, c.y)) {
-            val tail = Path().apply {
-                moveTo(c.x - len * 0.38f, c.y)
-                lineTo(c.x - len * 0.7f, c.y - bodyH * 0.55f)
-                lineTo(c.x - len * 0.62f, c.y)
-                lineTo(c.x - len * 0.7f, c.y + bodyH * 0.55f)
-                close()
-            }
-            drawPath(tail, look.fin)
-            drawPath(tail, ink, style = Stroke(2.5f))
-        }
-        // спинной плавник
-        val fin = Path().apply {
-            moveTo(c.x - len * 0.15f, c.y - bodyH * 0.4f)
-            quadraticTo(c.x, c.y - bodyH * 0.95f, c.x + len * 0.15f, c.y - bodyH * 0.4f)
-            close()
-        }
-        drawPath(fin, look.fin)
-        drawPath(fin, ink, style = Stroke(2.5f))
-        drawOval(look.body, Offset(c.x - len / 2, c.y - bodyH / 2), Size(len, bodyH))
-        // Fixed paper flecks stay inside the oval; no allocations or random shimmer per frame.
-        for (row in -2..2) for (col in -4..4) {
-            val u = col / 5f; val v = row / 3f
-            if (u*u + v*v < .85f) drawCircle(Color(0xFFFFF4D9).copy(alpha=.18f), len*.009f,
-                Offset(c.x + u*len*.5f, c.y + v*bodyH*.5f))
-        }
-        if (look.striped) {
-            for (k in 0..1) {
-                val x = c.x - len * 0.05f + k * len * 0.15f
-                drawLine(look.fin.copy(alpha = 0.8f), Offset(x, c.y - bodyH * 0.4f), Offset(x, c.y + bodyH * 0.4f), strokeWidth = len * 0.06f, cap = StrokeCap.Round)
-            }
-        }
-        drawOval(ink, Offset(c.x - len / 2, c.y - bodyH / 2), Size(len, bodyH), style = Stroke(2.5f))
-        val eye = Offset(c.x + len * 0.28f, c.y - bodyH * 0.1f)
-        drawCircle(Color.White, len * 0.085f, eye)
-        drawCircle(ink, len * 0.045f, Offset(eye.x + len * 0.015f, eye.y))
-        drawArc(ink, -40f, 80f, false, Offset(c.x + len * 0.34f, c.y + bodyH * 0.02f), Size(len * 0.1f, len * 0.08f), style = Stroke(2f))
     }
 }
 

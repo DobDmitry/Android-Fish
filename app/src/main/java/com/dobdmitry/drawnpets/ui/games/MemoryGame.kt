@@ -48,10 +48,11 @@ import kotlinx.coroutines.delay
 private class Face(val image: ImageBitmap?, val emoji: String)
 
 private const val PAIRS = 6
-private val fillerEmoji = listOf("🍎", "🍐", "🌼", "🐦", "🍄", "🎈", "⭐", "🌳", "🍪", "🥕")
+private val fillerEmoji = listOf("🍎", "🍐", "🐝", "🧀", "🍄", "🎈", "⭐", "🌳", "🍪", "🥕")
 
 @Composable
 fun MemoryGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
+    val art = rememberStoryArtwork()
     val finish by rememberUpdatedState(onFinish)
     val faces = remember {
         val list = mutableListOf<Face>()
@@ -100,6 +101,7 @@ fun MemoryGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
             .fillMaxSize()
             .background(GamePaper)
     ) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) { drawStoryScene(art, 2) }
         GameHud("🃏 Пары: $pairsFound/$PAIRS", "👆 Ходы: $moves")
         Column(
             Modifier
@@ -159,7 +161,7 @@ private fun MemoryCard(face: Face, up: Boolean, matched: Boolean, modifier: Modi
         contentAlignment = Alignment.Center,
     ) {
         if (rotation <= 90f) {
-            GameToken("?", Modifier.fillMaxSize().padding(20.dp))
+            GameToken("⭐", Modifier.fillMaxSize().padding(20.dp))
         } else {
             Box(
                 Modifier

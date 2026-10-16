@@ -70,6 +70,7 @@ private const val GROUND = 0.9f
  */
 @Composable
 fun FlyGame(sprite: CreatureSprite?, outfit: List<WornItem>, best: Int, onFinish: (Int) -> Unit) {
+    val art = rememberStoryArtwork()
     val finish by rememberUpdatedState(onFinish)
     val st = remember { FlyState() }
     var time by remember { mutableFloatStateOf(0f) }
@@ -173,9 +174,9 @@ fun FlyGame(sprite: CreatureSprite?, outfit: List<WornItem>, best: Int, onFinish
         ) {
             st.size = size
             val t = time
-            drawFlySky(st.distance)
+            drawStoryScene(art, 4)
             val pw = size.width * 0.18f
-            for (p in st.pillars) drawPillar(p, pw)
+            for (p in st.pillars) drawPillar(art, p, pw)
             val ph = size.width * 0.16f
             val px = size.width * 0.28f
             val angle = if (!st.started) 0f else (st.vy / size.height * 70f).coerceIn(-25f, 70f)
@@ -200,59 +201,14 @@ fun FlyGame(sprite: CreatureSprite?, outfit: List<WornItem>, best: Int, onFinish
     }
 }
 
-private fun DrawScope.drawFlySky(distance: Float) {
-    val w = size.width
-    val h = size.height
-    drawGamePaper(distance / 90f, GROUND)
-    // облака и холмы движутся медленнее колонн — объём
-    for (i in 0 until 4) {
-        val cx = w + 120f - ((distance * 0.15f + i * w * 0.45f) % (w + 240f))
-        val cy = h * (0.18f + (i % 3) * 0.1f)
-        drawCircle(Color.White, w * 0.06f, Offset(cx, cy))
-        drawCircle(Color.White, w * 0.045f, Offset(cx + w * 0.06f, cy + w * 0.01f))
-        drawCircle(Color.White, w * 0.04f, Offset(cx - w * 0.055f, cy + w * 0.012f))
-    }
-    for (i in 0 until 3) {
-        val hx = w * 1.5f - ((distance * 0.35f + i * w * 0.8f) % (w * 2.4f))
-        drawOval(Color(0xFFB5C39A), Offset(hx - w * 0.45f, h * (GROUND - 0.1f)), Size(w * 0.9f, h * 0.22f))
-    }
-    drawRect(GameSage, Offset(0f, h * GROUND), Size(w, h * (1f - GROUND)))
-    val stripe = w * 0.12f
-    var x = -(distance % stripe)
-    while (x < w) {
-        drawRect(GameInk.copy(alpha=.16f), Offset(x, h * GROUND + h * 0.02f), Size(stripe * 0.45f, h * 0.012f))
-        x += stripe
-    }
-}
-
-private fun DrawScope.drawPillar(p: Pillar, pw: Float) {
+private fun DrawScope.drawPillar(art: StoryArtwork, p: Pillar, pw: Float) {
     val h = size.height
     val gapTop = h * (p.gapY - p.gap / 2)
     val gapBottom = h * (p.gapY + p.gap / 2)
-    val capH = h * 0.035f
-    val ink = Palette.Ink
-    val dark = p.color.copy(red = p.color.red * 0.8f, green = p.color.green * 0.8f, blue = p.color.blue * 0.8f)
-    // верхняя колонна
-    drawRect(p.color, Offset(p.x - pw / 2, 0f), Size(pw, gapTop - capH))
-    drawRect(dark, Offset(p.x + pw * 0.2f, 0f), Size(pw * 0.25f, gapTop - capH))
-    drawRect(ink, Offset(p.x - pw / 2, -4f), Size(pw, gapTop - capH + 4f), style = Stroke(4f))
-    drawRoundRect(p.color, Offset(p.x - pw * 0.6f, gapTop - capH), Size(pw * 1.2f, capH), CornerRadius(10f))
-    drawRoundRect(ink, Offset(p.x - pw * 0.6f, gapTop - capH), Size(pw * 1.2f, capH), CornerRadius(10f), style = Stroke(4f))
-    // нижняя колонна
-    val groundY = h * GROUND
-    drawRect(p.color, Offset(p.x - pw / 2, gapBottom + capH), Size(pw, groundY - gapBottom - capH))
-    drawRect(dark, Offset(p.x + pw * 0.2f, gapBottom + capH), Size(pw * 0.25f, groundY - gapBottom - capH))
-    drawRect(ink, Offset(p.x - pw / 2, gapBottom + capH), Size(pw, groundY - gapBottom - capH), style = Stroke(4f))
-    drawRoundRect(p.color, Offset(p.x - pw * 0.6f, gapBottom), Size(pw * 1.2f, capH), CornerRadius(10f))
-    drawRoundRect(ink, Offset(p.x - pw * 0.6f, gapBottom), Size(pw * 1.2f, capH), CornerRadius(10f), style = Stroke(4f))
-    // Pencil seams make the columns read as stacked cardboard blocks.
-    for (i in 1..14) {
-        val yy = i * h / 14f
-        if (yy < gapTop - capH || yy > gapBottom + capH && yy < groundY) {
-            drawLine(GameInk.copy(alpha=.22f), Offset(p.x-pw*.45f,yy),Offset(p.x+pw*.45f,yy+2f),2f)
-        }
+    rotate(180f, Offset(p.x, gapTop / 2)) {
+        drawStoryItem(art, 19, Offset(p.x, gapTop / 2), Size(pw * 1.2f, gapTop))
     }
-    // цветочек на крышке нижней колонны
-    drawGameToken("🌼", Offset(p.x, gapBottom - pw * 0.12f), pw * 0.35f)
-    if (p.star) drawGameToken("🌟", Offset(p.x, h * p.gapY), pw * 0.45f)
+    val lowerHeight = (h * GROUND - gapBottom).coerceAtLeast(1f)
+    drawStoryItem(art, 19, Offset(p.x, gapBottom + lowerHeight / 2), Size(pw * 1.2f, lowerHeight))
+    if (p.star) drawGameToken(art, "🌟", Offset(p.x, h * p.gapY), pw * .45f)
 }

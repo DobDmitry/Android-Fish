@@ -56,6 +56,7 @@ private const val CATCH_DURATION = 45f
 
 @Composable
 fun CatchGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) -> Unit) {
+    val art = rememberStoryArtwork()
     val st = remember { CatchState() }
     var time by remember { mutableFloatStateOf(0f) }
     var score by remember { mutableIntStateOf(0) }
@@ -147,9 +148,8 @@ fun CatchGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) -
         ) {
             st.size = size
             val t = time
-            drawGamePaper(t)
-            drawRect(GameSage, Offset(0f, size.height * 0.9f), Size(size.width, size.height * 0.1f))
-            for (f in st.items) drawGameToken(f.emoji, Offset(f.x, f.y), size.width * 0.11f, rotation = t * f.spin)
+            drawStoryScene(art, 0)
+            for (f in st.items) drawGameToken(art, f.emoji, Offset(f.x, f.y), size.width * 0.11f, rotation = t * f.spin)
             val h = size.width * 0.28f
             val blink = st.hurt > 0f && (t * 12f).toInt() % 2 == 0
             val act = when {
@@ -164,7 +164,7 @@ fun CatchGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) -
                 alpha = if (blink) 0.35f else 1f, action = act, actionTime = st.eatT.coerceAtLeast(0f),
             )
             // корзинка над головой — подсказка, куда ловить
-            drawGameToken("🧺", Offset(st.playerRect.center.x, st.playerRect.top + 6f + sin(t * 6f) * 2f), h * 0.32f)
+            drawGameToken(art, "🧺", Offset(st.playerRect.center.x, st.playerRect.top + 6f + sin(t * 6f) * 2f), h * 0.32f)
             drawParticles(st.particles)
         }
         GameHud("⭐ $score   ${"❤️".repeat(lives.coerceAtLeast(0))}", "⏱ $secondsLeft")
