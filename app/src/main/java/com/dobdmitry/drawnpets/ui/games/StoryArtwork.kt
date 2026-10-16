@@ -22,6 +22,8 @@ internal class StoryArtwork(resources: Resources) {
     val scenes = BitmapFactory.decodeResource(resources, R.drawable.story_scenes).asImageBitmap()
     val items: List<ImageBitmap> = BitmapFactory.decodeResource(resources, R.drawable.story_items).let { atlas ->
         List(20) { i ->
+            // The cactus cell contains the edge of the neighboring cloud: isolate its painted bounds.
+            if (i == 17) return@List trimSprite(atlas, 655, 738, 235, 270).asImageBitmap()
             val left = i % 5 * atlas.width / 5
             val rows = intArrayOf(0, 272, 515, 735, 1024)
             val top = rows[i / 5]

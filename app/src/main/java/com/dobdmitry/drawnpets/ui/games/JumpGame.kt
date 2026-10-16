@@ -143,7 +143,6 @@ fun JumpGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) ->
                             st.vy = size.height * (if (st.jumpsLeft == 2) 1.25f else 1.05f)
                             Sounds.play(Sfx.JUMP, rate = if (st.jumpsLeft == 2) 1f else 1.25f)
                             st.jumpsLeft -= 1
-                            st.particles.burst(size.width * 0.22f, size.height * JUMP_GROUND_FRACTION - st.lift, "💨", 1, 30f)
                         }
                     })
                 }
