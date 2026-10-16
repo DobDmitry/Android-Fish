@@ -79,7 +79,7 @@ private class Swimmer(var x: Float, var y: Float) {
     var tx = x
     var ty = y
     var facingLeft = false
-    var facingBlend = 1f
+    val turn = com.dobdmitry.drawnpets.anim.FishTurn()
     var speed = 60f + Random.nextFloat() * 50f
     var rect = Rect.Zero
     var phase = Random.nextFloat() * 10f
@@ -105,6 +105,7 @@ fun PondScene(
     onFrog: () -> Unit,
     onFed: () -> Unit,
 ) {
+    val crabArt = rememberStoryCrab()
     val fishArt = rememberStoryFish()
     val npcArt = rememberNpcArtwork()
     val paperIcons = ImageBitmap.imageResource(R.drawable.paper_icons)
@@ -164,7 +165,7 @@ fun PondScene(
                         if (p.y < sz.height * (BOTTOM + 0.02f)) p.y += 28f * dt
                         if (p.age > 12f) pit.remove()
                     }
-                    fun swim(s: Swimmer, onEat: () -> Unit) {
+                    fun swim(s: Swimmer, turn: com.dobdmitry.drawnpets.anim.FishTurn? = null, onEat: () -> Unit) {
                         val tp = s.targetPellet
                         if (tp != null && tp !in pellets) s.targetPellet = null
                         if (s.targetPellet == null && pellets.isNotEmpty()) {
@@ -177,7 +178,9 @@ fun PondScene(
                         val dx = gx - s.x
                         val dy = gy - s.y
                         val d = hypot(dx, dy)
-                        val sp = if (target != null) s.speed * 2.2f else s.speed
+                        if (abs(dx) > 3f) s.facingLeft = dx < 0
+                        turn?.step(s.facingLeft, dt)
+                        val sp = (if (target != null) s.speed * 2.2f else s.speed) * (turn?.movement ?: 1f)
                         if (d < 14f) {
                             if (target != null) {
                                 pellets.remove(target)
@@ -187,16 +190,13 @@ fun PondScene(
                                 onEat()
                             } else randomTarget(s, sz)
                         } else {
-                            s.x += dx / d * sp * dt
+                            val horizontal = if (turn == null) dx / d else abs(dx) / d * (if (turn.facingLeft) -1f else 1f)
+                            s.x += horizontal * sp * dt
                             s.y += dy / d * sp * dt
                             if (abs(dx) > 3f) s.facingLeft = dx < 0
                         }
                     }
-                    fish.forEach {
-                        swim(it) {}
-                        val targetFacing = if (it.facingLeft) -1f else 1f
-                        it.facingBlend += (targetFacing - it.facingBlend) * (1f - kotlin.math.exp(-dt * 7f))
-                    }
+                    fish.forEach { swim(it, it.turn) {} }
                     for (c in currentPond) {
                         val s = creatures[c.id] ?: continue
                         if (s.happyT >= 0f) {
@@ -270,12 +270,12 @@ fun PondScene(
             // Квака на кувшинке с картинки
             frogRectRef[0] = drawNpc(Npc.FROG, Offset(pan.sx(0.87f), size.height * SURFACE + sin(t * 1.5f) * 3f), size.height * 0.18f, t, art = npcArt)
             // краб на дне
-            drawPaperCrab(Offset(pan.sx(crabX - 0.1f), size.height * (BOTTOM + 0.06f)), size.width * 0.10f, t)
+            drawStoryCrab(crabArt, Offset(pan.sx(crabX - 0.1f), size.height * (BOTTOM + 0.06f)), size.width * 0.14f, t)
             // корм
             for (p in pellets) drawCircle(Color(0xFFC98B55), 7f, Offset(p.x - ox, p.y))
             // рыбки
             fish.forEachIndexed { i, s ->
-                fishArt[i % fishArt.size].draw(this, Offset(s.x - ox, s.y), size.width * fishLengths[i] * 1.2f, s.facingBlend, t + s.phase)
+                fishArt[i % fishArt.size].draw(this, Offset(s.x - ox, s.y), size.width * fishLengths[i] * 1.2f, s.turn.facingLeft, s.turn.tilt, t + s.phase)
             }
             // нарисованные жители
             for (c in currentPond) {
@@ -312,27 +312,4 @@ private fun DrawScope.drawBubbles(t: Float, bubbles: List<Offset>, pan: ScenePan
         val xx = pan.sx(b.x) + sin(t * 2f + i) * 8f
         drawCircle(Color.White.copy(alpha = 0.5f), 5f + (i % 3) * 3f, Offset(xx, yy), style = Stroke(2.5f))
     }
-}
-
-private fun DrawScope.drawPaperCrab(c: Offset, w: Float, time: Float) {
-    val shell = Color(0xFFC97B60)
-    val ink = Color(0xFF70503C)
-    for (side in listOf(-1f, 1f)) {
-        for (leg in 0..2) {
-            val y = c.y + w * (.05f + leg*.11f)
-            val sway = sin(time*7f + leg)*w*.025f
-            drawLine(ink, Offset(c.x+side*w*.2f,y),Offset(c.x+side*w*.48f,y+w*.11f+sway),w*.045f,StrokeCap.Round)
-        }
-        val claw=Offset(c.x+side*w*.4f,c.y-w*.15f+sin(time*2f)*w*.025f)
-        drawLine(ink,Offset(c.x+side*w*.18f,c.y),claw,w*.055f,StrokeCap.Round)
-        drawArc(shell,30f,300f,true,Offset(claw.x-w*.15f,claw.y-w*.15f),Size(w*.3f,w*.3f))
-    }
-    drawOval(ink,Offset(c.x-w*.33f,c.y-w*.2f),Size(w*.66f,w*.45f))
-    drawOval(shell,Offset(c.x-w*.30f,c.y-w*.18f),Size(w*.60f,w*.4f))
-    for (side in listOf(-1f,1f)) {
-        val eye=Offset(c.x+side*w*.12f,c.y-w*.2f)
-        drawCircle(Color(0xFFFFF2D9),w*.065f,eye)
-        drawCircle(ink,w*.028f,eye)
-    }
-    for (i in -2..2) drawCircle(Color(0xFFE6B390),w*.018f,Offset(c.x+i*w*.09f,c.y+w*.04f))
 }

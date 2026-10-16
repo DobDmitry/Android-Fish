@@ -16,8 +16,9 @@ internal class StoryFish(private val bitmap: android.graphics.Bitmap) {
     private val vertices = FloatArray((20 + 1) * (8 + 1) * 2)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
-    fun draw(scope: DrawScope, center: Offset, width: Float, facing: Float, time: Float) {
+    fun draw(scope: DrawScope, center: Offset, width: Float, facingLeft: Boolean, tilt: Float, time: Float) {
         val height = width * bitmap.height / bitmap.width
+        val facing = if (facingLeft) -1f else 1f
         var index = 0
         for (row in 0..8) for (col in 0..20) {
             val u = col / 20f
@@ -25,9 +26,13 @@ internal class StoryFish(private val bitmap: android.graphics.Bitmap) {
             val tail = (1f-u)*(1f-u)*(1f-u)
             vertices[index++] = center.x + (u-.5f)*width*facing
             vertices[index++] = center.y + (v-.5f)*height +
-                sin(time*7f-u*4f)*height*(.012f+.11f*tail)
+                sin(time*7f-u*4f)*height*(.006f+.045f*tail)
         }
-        scope.drawContext.canvas.nativeCanvas.drawBitmapMesh(bitmap,20,8,vertices,0,null,0,paint)
+        val canvas = scope.drawContext.canvas.nativeCanvas
+        canvas.save()
+        canvas.rotate(-tilt * facing, center.x, center.y)
+        canvas.drawBitmapMesh(bitmap,20,8,vertices,0,null,0,paint)
+        canvas.restore()
     }
 }
 

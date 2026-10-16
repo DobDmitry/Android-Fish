@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.res.imageResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,6 +55,7 @@ private class JumpState {
 
 @Composable
 fun JumpGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) -> Unit) {
+    val background = androidx.compose.ui.graphics.ImageBitmap.imageResource(com.dobdmitry.drawnpets.R.drawable.story_runner)
     val art = rememberStoryArtwork()
     val st = remember { JumpState() }
     var time by remember { mutableFloatStateOf(0f) }
@@ -91,7 +93,7 @@ fun JumpGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) ->
                     st.coins += Coin(sz.width + 60f, sz.height * (0.42f + Random.nextFloat() * 0.18f))
                     st.nextCoin = 1.5f + Random.nextFloat() * 2f
                 }
-                val ground = sz.height * 0.78f
+                val ground = sz.height * JUMP_GROUND_FRACTION
                 val ph = sz.width * 0.22f
                 val px = sz.width * 0.22f
                 val player = Rect(px - ph * 0.3f, ground - st.lift - ph * 0.85f, px + ph * 0.3f, ground - st.lift)
@@ -141,7 +143,7 @@ fun JumpGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) ->
                             st.vy = size.height * (if (st.jumpsLeft == 2) 1.25f else 1.05f)
                             Sounds.play(Sfx.JUMP, rate = if (st.jumpsLeft == 2) 1f else 1.25f)
                             st.jumpsLeft -= 1
-                            st.particles.burst(size.width * 0.22f, size.height * 0.78f - st.lift, "💨", 1, 30f)
+                            st.particles.burst(size.width * 0.22f, size.height * JUMP_GROUND_FRACTION - st.lift, "💨", 1, 30f)
                         }
                     })
                 }
@@ -150,8 +152,8 @@ fun JumpGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) ->
             val t = time
             val w = size.width
             val h = size.height
-            val ground = h * 0.78f
-            drawStoryScene(art, 1)
+            val ground = h * JUMP_GROUND_FRACTION
+            drawRunnerScene(background, ground, st.distance)
             for (c in st.coins) drawGameToken(art, "🪙", Offset(c.x, c.y), w * 0.08f)
             for (o in st.obstacles) drawGameToken(art, o.emoji, Offset(o.x, ground - w * 0.06f), w * 0.12f)
             val blink = st.hurt > 0f && (t * 12f).toInt() % 2 == 0
