@@ -74,6 +74,7 @@ import com.dobdmitry.drawnpets.ui.common.drawCreature
 import com.dobdmitry.drawnpets.ui.common.drawEmoji
 import com.dobdmitry.drawnpets.ui.common.drawLabel
 import com.dobdmitry.drawnpets.ui.common.drawParticles
+import com.dobdmitry.drawnpets.ui.common.drawPaperAtmosphere
 import com.dobdmitry.drawnpets.ui.common.drawSceneBackground
 import com.dobdmitry.drawnpets.ui.common.drawFieldCoins
 import com.dobdmitry.drawnpets.ui.pond.PondScene
@@ -273,6 +274,7 @@ private fun LocationScene(
         ) {
             val t = time
             background?.let { drawSceneBackground(it, pan) }
+            drawPaperAtmosphere(location, t, pan)
             val items = mutableListOf<SceneItem>()
             for (spot in spec.npcs) {
                 items += SceneItem(spot.y) {

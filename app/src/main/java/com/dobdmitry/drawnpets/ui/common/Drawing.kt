@@ -84,6 +84,7 @@ private val inkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
 private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 private val tmpPoint = FloatArray(2)
 private val tmpRect = android.graphics.RectF()
+private val eyePath = android.graphics.Path()
 
 /**
  * Рисует оживший рисунок. [feet] — точка «ног» (низ по центру), [height] — высота картинки.
@@ -176,26 +177,43 @@ fun DrawScope.drawCreature(
     drawOutfit(canvas, sprite, outfit, back = true, alpha = alpha)
     canvas.drawBitmapMesh(sprite.bitmap, Animator.GX, Animator.GY, sprite.verts, 0, null, 0, meshPaint)
 
-    // Глаза: моргание, «счастливые» дуги, сон.
+    // Keep the original eye visible between two smoothly moving lids.
     val eyeState = anim.eyeState()
+    val closure = anim.eyelidClosure()
     val a255 = (alpha.coerceIn(0f, 1f) * 255).toInt()
-    if (eyeState != EyeState.OPEN) {
+    if (closure > 0f) {
         for (e in rig.eyes) {
             anim.map(e.cx, e.cy, tmpPoint)
             val x = tmpPoint[0]
             val y = tmpPoint[1]
+            val rx = e.rx * 1.12f
+            val ry = e.ry * 1.12f
+            val slit = ry * (1f - closure)
             lidPaint.color = e.lidColor
             lidPaint.alpha = a255
-            canvas.drawOval(x - e.rx * 1.15f, y - e.ry * 1.15f, x + e.rx * 1.15f, y + e.ry * 1.15f, lidPaint)
-            inkPaint.strokeWidth = maxOf(3f, e.rx * 0.28f)
-            inkPaint.alpha = a255
-            if (eyeState == EyeState.HAPPY) {
-                tmpRect.set(x - e.rx, y - e.ry * 0.3f, x + e.rx, y + e.ry * 0.9f)
-                canvas.drawArc(tmpRect, 180f, 180f, false, inkPaint)
-            } else {
-                tmpRect.set(x - e.rx, y - e.ry * 0.9f, x + e.rx, y + e.ry * 0.3f)
-                canvas.drawArc(tmpRect, 0f, 180f, false, inkPaint)
+            lidPaint.colorFilter = meshPaint.colorFilter
+            canvas.save()
+            canvas.clipRect(x - rx, y - ry, x + rx, y - slit)
+            canvas.drawOval(x - rx, y - ry, x + rx, y + ry, lidPaint)
+            canvas.restore()
+            canvas.save()
+            canvas.clipRect(x - rx, y + slit, x + rx, y + ry)
+            canvas.drawOval(x - rx, y - ry, x + rx, y + ry, lidPaint)
+            canvas.restore()
+            // A fine pencil arc replaces the old heavy semicircle.
+            inkPaint.color = 0xFF514638.toInt()
+            inkPaint.strokeWidth = maxOf(1.2f, e.rx * .12f)
+            inkPaint.alpha = (a255 * ((closure - .65f) / .35f).coerceIn(0f, 1f)).toInt()
+            eyePath.reset()
+            val happy = eyeState == EyeState.HAPPY
+            val curve = e.ry * when {
+                happy -> -.55f
+                eyeState == EyeState.SLEEP -> .42f
+                else -> .2f
             }
+            eyePath.moveTo(x - e.rx * .84f, y)
+            eyePath.quadTo(x, y + curve, x + e.rx * .84f, y)
+            canvas.drawPath(eyePath, inkPaint)
         }
     }
     // Румянец, когда весело

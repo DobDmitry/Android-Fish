@@ -1,5 +1,7 @@
 package com.dobdmitry.drawnpets.ui.games
 
+import com.dobdmitry.drawnpets.ui.common.paperSurface
+import com.dobdmitry.drawnpets.ui.common.PaperType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -76,7 +78,7 @@ fun PlayScreen(vm: GameViewModel, game: MiniGame, creatureId: String?, onExit: (
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFFBDE6FF))
+            .background(GamePaper)
     ) {
         key(round) {
             when (game) {
@@ -89,7 +91,7 @@ fun PlayScreen(vm: GameViewModel, game: MiniGame, creatureId: String?, onExit: (
             }
         }
         Column(Modifier.statusBarsPadding()) {
-            ScreenHeader(game.title, null, onExit)
+            GameHeader(game.title, null, onExit)
         }
 
         result?.let { r ->
@@ -100,18 +102,21 @@ fun PlayScreen(vm: GameViewModel, game: MiniGame, creatureId: String?, onExit: (
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
                 contentAlignment = Alignment.Center,
             ) {
-                Panel(
-                    Modifier
+                Box(
+                    modifier = Modifier
                         .padding(24.dp)
                         .navigationBarsPadding()
+                        .paperSurface(GamePaper)
+                        .padding(16.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (r.record) "🏆 Новый рекорд!" else "🎉 Игра окончена!", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Palette.Ink)
+                        GameToken(if (r.record) "🏆" else "⭐", Modifier.size(72.dp))
+                        Text(if (r.record) "Новый рекорд!" else "Игра окончена!", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Palette.Ink)
                         if (creature != null) {
                             AnimatedCreature(creature, sprite, Modifier.size(130.dp), seed = 3, action = Action.HAPPY)
                         }
                         Text("Очки: ${r.score}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
-                        Text("Монетки: +${r.coins} 🪙", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Palette.Coral)
+                        Text("Монетки: +${r.coins}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Palette.Coral)
                         if (creature != null) {
                             Text(
                                 "${creature.name} повеселился! 😊 +радость",
@@ -120,8 +125,8 @@ fun PlayScreen(vm: GameViewModel, game: MiniGame, creatureId: String?, onExit: (
                         }
                         Spacer(Modifier.height(14.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            PillButton("🔄 Ещё раз") { Sounds.play(Sfx.TAP); result = null; round++ }
-                            PillButton("🏠 Выход", color = Palette.Mint, textColor = Palette.Ink, onClick = onExit)
+                            PillButton("Ещё раз", color = GameRose) { Sounds.play(Sfx.TAP); result = null; round++ }
+                            PillButton("Выход", color = GameSage, textColor = Palette.Ink, onClick = onExit)
                         }
                     }
                 }
@@ -149,11 +154,12 @@ fun GameHud(left: String, right: String) {
 private fun HudChip(text: String) {
     Text(
         text,
-        fontSize = 18.sp,
+        fontSize = 16.sp,
+        fontFamily = PaperType,
         fontWeight = FontWeight.ExtraBold,
         color = Palette.Ink,
         modifier = Modifier
-            .background(Color.White.copy(alpha = 0.85f), androidx.compose.foundation.shape.RoundedCornerShape(50))
+            .paperSurface(GamePaper, 14.dp)
             .padding(horizontal = 14.dp, vertical = 6.dp)
     )
 }

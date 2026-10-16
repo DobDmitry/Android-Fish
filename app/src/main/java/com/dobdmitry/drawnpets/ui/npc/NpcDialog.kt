@@ -68,7 +68,7 @@ private val raccoonPhrases = listOf(
 )
 
 private val catPhrases = listOf(
-    "Мяу! Поиграем? У меня целых пять весёлых игр!",
+    "Мяу! Поиграем? У меня целых шесть весёлых игр!",
     "Кто поймает больше всех вкусняшек? Мур-р!",
     "Я лучше всех играю в прятки… ну, почти.",
     "После игр питомцы радуются, но устают. Не забудь их покормить!",
@@ -146,7 +146,7 @@ fun NpcDialog(
                             .clip(RoundedCornerShape(20.dp))
                             .background(Palette.SkyLight)
                     ) {
-                        drawNpc(npc, Offset(size.width / 2, size.height * 0.96f), size.height * 0.85f, time, art = npcArt)
+                        drawNpc(npc, Offset(size.width / 2, size.height * 0.96f), size.height * 0.85f, time, art = npcArt, greeting = true)
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {

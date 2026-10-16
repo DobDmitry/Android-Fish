@@ -147,9 +147,9 @@ fun CatchGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) -
         ) {
             st.size = size
             val t = time
-            drawRect(Brush.verticalGradient(listOf(Color(0xFF9ED8FF), Color(0xFFFFF1D6))))
-            drawRect(Palette.Grass, Offset(0f, size.height * 0.9f), Size(size.width, size.height * 0.1f))
-            for (f in st.items) drawEmoji(f.emoji, Offset(f.x, f.y), size.width * 0.11f, rotation = t * f.spin)
+            drawGamePaper(t)
+            drawRect(GameSage, Offset(0f, size.height * 0.9f), Size(size.width, size.height * 0.1f))
+            for (f in st.items) drawGameToken(f.emoji, Offset(f.x, f.y), size.width * 0.11f, rotation = t * f.spin)
             val h = size.width * 0.28f
             val blink = st.hurt > 0f && (t * 12f).toInt() % 2 == 0
             val act = when {
@@ -164,7 +164,7 @@ fun CatchGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) -
                 alpha = if (blink) 0.35f else 1f, action = act, actionTime = st.eatT.coerceAtLeast(0f),
             )
             // корзинка над головой — подсказка, куда ловить
-            drawEmoji("🧺", Offset(st.playerRect.center.x, st.playerRect.top + 6f + sin(t * 6f) * 2f), h * 0.32f)
+            drawGameToken("🧺", Offset(st.playerRect.center.x, st.playerRect.top + 6f + sin(t * 6f) * 2f), h * 0.32f)
             drawParticles(st.particles)
         }
         GameHud("⭐ $score   ${"❤️".repeat(lives.coerceAtLeast(0))}", "⏱ $secondsLeft")

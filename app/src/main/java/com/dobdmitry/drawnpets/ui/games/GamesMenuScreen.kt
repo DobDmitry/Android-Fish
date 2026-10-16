@@ -1,5 +1,6 @@
 package com.dobdmitry.drawnpets.ui.games
 
+import com.dobdmitry.drawnpets.ui.common.paperSurface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -62,13 +63,13 @@ enum class MiniGame(
         "Лови вкусняшки! Води пальцем по экрану. Камни и пчёл не лови!"),
     JUMP("jump", "Прыг-скок", "🌵", "Нажимай на экран, чтобы перепрыгивать кактусы. Можно прыгнуть дважды!", Color(0xFFE2F6D5),
         "Нажимай на экран, чтобы прыгать через кактусы! Можно прыгнуть два раза."),
-    MEMORY("memory", "Найди пару", "🃏", "Открывай карточки и ищи одинаковых персонажей.", Color(0xFFE5E1FF),
+    MEMORY("memory", "Найди пару", "🃏", "Открывай карточки и ищи одинаковых персонажей.", Color(0xFFE4DDD0),
         "Открывай карточки и ищи одинаковые картинки!"),
-    BALLOONS("balloons", "Шарики", "🎈", "Лопай шарики, пока не улетели. Золотые — самые ценные, тучки не трогай!", Color(0xFFFFE0EC),
+    BALLOONS("balloons", "Шарики", "🎈", "Лопай шарики, пока не улетели. Золотые — самые ценные, тучки не трогай!", Color(0xFFF0DFCF),
         "Лопай шарики! Золотые — самые лучшие. А тучки не трогай!"),
     FLY("fly", "Полёт", "🐦", "Нажимай на экран, чтобы взлетать, и пролетай между колоннами. Звёздочки — бонус!", Color(0xFFDDEEFF),
         "Нажимай на экран, чтобы взлететь! Пролетай между колоннами и не задевай их."),
-    HIDE("hide", "Прятки", "🌳", "Смотри внимательно, за какой куст спрятался питомец. Кусты умеют меняться местами!", Color(0xFFD8F5E6),
+    HIDE("hide", "Прятки", "🌳", "Смотри внимательно, за какой куст спрятался питомец. Кусты умеют меняться местами!", Color(0xFFD4E0C1),
         "Смотри внимательно, за какой куст я спрячусь!"),
 }
 
@@ -93,11 +94,11 @@ fun GamesMenuScreen(
     Column(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFFFFF5FA))
+            .background(Color(0xFFF7EDD8))
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        ScreenHeader("Игры с Муркой", state.coins, onBack)
+        GameHeader("Игры с Муркой", state.coins, onBack)
         Column(
             Modifier
                 .fillMaxSize()
@@ -146,7 +147,7 @@ fun GamesMenuScreen(
                         .fillMaxWidth()
                         .padding(vertical = 6.dp)
                         .clip(RoundedCornerShape(22.dp))
-                        .background(g.color)
+                        .paperSurface(g.color)
                         .border(2.5.dp, Palette.Ink.copy(alpha = 0.7f), RoundedCornerShape(22.dp))
                         .clickable { Sounds.play(Sfx.TAP); onPlay(g, selected) }
                         .padding(14.dp),
@@ -157,7 +158,7 @@ fun GamesMenuScreen(
                             .size(60.dp)
                             .background(Color.White, RoundedCornerShape(18.dp)),
                         contentAlignment = Alignment.Center,
-                    ) { Text(g.emoji, fontSize = 34.sp) }
+                    ) { GameToken(g.emoji, Modifier.size(48.dp)) }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(g.title, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = Palette.Ink)
@@ -165,7 +166,7 @@ fun GamesMenuScreen(
                         val best = state.bestScores[g.id]
                         if (best != null) Text("🏆 Рекорд: $best", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Palette.Coral)
                     }
-                    Text("▶️", fontSize = 26.sp)
+                    Text("›", fontSize = 32.sp, color = GameInk)
                 }
             }
             Spacer(Modifier.height(16.dp))

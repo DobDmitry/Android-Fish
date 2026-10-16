@@ -166,9 +166,10 @@ fun HideSeekGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int
             val t = time
             val w = size.width
             val h = size.height
-            drawRect(Brush.verticalGradient(listOf(Color(0xFF9ED8FF), Color(0xFFDFF5C8)), 0f, h * 0.3f))
-            drawRect(Brush.verticalGradient(listOf(Color(0xFF8ED46A), Palette.GrassDark), h * 0.3f, h), Offset(0f, h * 0.3f), Size(w, h * 0.7f))
+            drawGamePaper(t, .3f)
+            drawRect(Brush.verticalGradient(listOf(Color(0xFFB5C39A), GameSage), h * 0.3f, h), Offset(0f, h * 0.3f), Size(w, h * 0.7f))
             val r = w * 0.14f
+            drawPaperGrain()
             val ch = w * 0.24f
             val hidden = st.hideBush
 
@@ -228,11 +229,11 @@ private fun DrawScope.drawBush(c: Offset, r: Float, shake: Float) {
     }
     for ((o, k) in parts) {
         val p = Offset(c.x + o.x * r + shake, c.y + o.y * r)
-        drawCircle(Color(0xFF3FA34D), r * k, p)
+        drawCircle(Color(0xFF8B9F72), r * k, p)
     }
-    drawCircle(Color(0xFF5CC46A), r * 0.3f, Offset(c.x - r * 0.25f + shake, c.y - r * 0.85f))
+    drawCircle(Color(0xFFB4C399), r * 0.3f, Offset(c.x - r * 0.25f + shake, c.y - r * 0.85f))
     for (i in 0 until 3) {
-        drawCircle(Color(0xFFFF5C7A), r * 0.07f, Offset(c.x + (i - 1) * r * 0.45f + shake, c.y - r * (0.35f + (i % 2) * 0.3f)))
+        drawCircle(Color(0xFFD98B72), r * 0.07f, Offset(c.x + (i - 1) * r * 0.45f + shake, c.y - r * (0.35f + (i % 2) * 0.3f)))
     }
     drawOval(Color.Black.copy(alpha = 0.12f), Offset(c.x - r, c.y - r * 0.1f), Size(r * 2, r * 0.3f))
 }

@@ -52,7 +52,7 @@ private class Balloon(
 )
 
 private val balloonColors = listOf(
-    Color(0xFFFF5C7A), Color(0xFF5CC8FF), Color(0xFF7BE07A), Color(0xFFB59CFF), Color(0xFFFFA94D), Color(0xFFFF8FB8),
+    Color(0xFFD98B72), Color(0xFF9CB9BF), Color(0xFFA8B88B), Color(0xFFB5A6BB), Color(0xFFD6AF77), Color(0xFFDCA59A),
 )
 
 private const val BALLOON_TIME = 40f
@@ -145,7 +145,7 @@ fun BalloonGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
         ) {
             sizeRef[0] = size
             val t = time
-            drawRect(Brush.verticalGradient(listOf(Color(0xFF7EC8F0), Color(0xFFFFE0EC))))
+            drawGamePaper(t, .95f)
             for (b in balloons) {
                 val bx = b.x + sin(t * 2f + b.phase) * 12f
                 drawBalloon(Offset(bx, b.y), size.width * 0.09f, b, t)
@@ -158,10 +158,10 @@ fun BalloonGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
 
 private fun DrawScope.drawBalloon(c: Offset, r: Float, b: Balloon, t: Float) {
     if (b.kind == BalloonKind.STORM) {
-        drawEmoji("⛈️", c, r * 2.2f)
+        drawGameToken("⛈️", c, r * 2.2f)
         return
     }
-    val color = if (b.kind == BalloonKind.GOLD) Color(0xFFFFD84D) else b.color
+    val color = if (b.kind == BalloonKind.GOLD) Color(0xFFE0B45C) else b.color
     // ниточка
     val string = Path().apply {
         moveTo(c.x, c.y + r * 1.2f)
@@ -174,7 +174,7 @@ private fun DrawScope.drawBalloon(c: Offset, r: Float, b: Balloon, t: Float) {
     drawPath(knot, color)
     drawOval(color, Offset(c.x - r, c.y - r * 1.2f), Size(r * 2, r * 2.4f))
     drawOval(Palette.Ink.copy(alpha = 0.7f), Offset(c.x - r, c.y - r * 1.2f), Size(r * 2, r * 2.4f), style = Stroke(3f))
-    drawOval(Color.White.copy(alpha = 0.5f), Offset(c.x - r * 0.6f, c.y - r * 0.9f), Size(r * 0.45f, r * 0.7f))
+    drawOval(GamePaper.copy(alpha = 0.35f), Offset(c.x - r * 0.6f, c.y - r * 0.9f), Size(r * 0.45f, r * 0.7f))
     val img = b.friend
     if (img != null) {
         val s = r * 1.4f
@@ -187,5 +187,5 @@ private fun DrawScope.drawBalloon(c: Offset, r: Float, b: Balloon, t: Float) {
             IntSize(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1)),
         )
     }
-    if (b.kind == BalloonKind.GOLD) drawEmoji("⭐", c, r)
+    if (b.kind == BalloonKind.GOLD) drawGameToken("⭐", c, r)
 }

@@ -38,6 +38,7 @@ import com.dobdmitry.drawnpets.R
 import com.dobdmitry.drawnpets.ui.common.LocationTabs
 import com.dobdmitry.drawnpets.ui.common.ScenePan
 import com.dobdmitry.drawnpets.ui.common.drawFieldCoins
+import com.dobdmitry.drawnpets.ui.common.drawPaperAtmosphere
 import com.dobdmitry.drawnpets.ui.common.drawSceneBackground
 import com.dobdmitry.drawnpets.ui.common.scenePan
 import androidx.compose.ui.graphics.ImageBitmap
@@ -265,6 +266,7 @@ fun PondScene(
         ) {
             val t = time
             drawSceneBackground(background, pan)
+            drawPaperAtmosphere(Habitat.POND, t, pan)
             // Координаты рыб и жителей — в пикселях всего пруда (он шире экрана)
             canvasSizeRef[0] = Size(pan.worldW, size.height)
             val ox = pan.offset

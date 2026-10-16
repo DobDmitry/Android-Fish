@@ -3,6 +3,8 @@ package com.dobdmitry.drawnpets.ui.games
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import com.dobdmitry.drawnpets.ui.common.paperSurface
+import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,7 +48,7 @@ import kotlinx.coroutines.delay
 private class Face(val image: ImageBitmap?, val emoji: String)
 
 private const val PAIRS = 6
-private val fillerEmoji = listOf("🐶", "🐱", "🦊", "🐼", "🐸", "🐵", "🦄", "🐙", "🐞", "🐢")
+private val fillerEmoji = listOf("🍎", "🍐", "🌼", "🐦", "🍄", "🎈", "⭐", "🌳", "🍪", "🥕")
 
 @Composable
 fun MemoryGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
@@ -96,7 +98,7 @@ fun MemoryGame(vm: GameViewModel, onFinish: (Int) -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFFE5E1FF), Color(0xFFFFE0EC))))
+            .background(GamePaper)
     ) {
         GameHud("🃏 Пары: $pairsFound/$PAIRS", "👆 Ходы: $moves")
         Column(
@@ -143,12 +145,13 @@ private fun MemoryCard(face: Face, up: Boolean, matched: Boolean, modifier: Modi
                 rotationY = rotation
                 cameraDistance = 12f * density
             }
+            .rotate(if (matched) -2f else 0f)
             .clip(RoundedCornerShape(16.dp))
-            .background(
+            .paperSurface(
                 when {
-                    rotation <= 90f -> Palette.Coral
-                    matched -> Color(0xFFD8F5E6)
-                    else -> Color.White
+                    rotation <= 90f -> GameSage
+                    matched -> Color(0xFFD4E0C1)
+                    else -> GamePaper
                 }
             )
             .border(2.5.dp, Palette.Ink.copy(alpha = 0.7f), RoundedCornerShape(16.dp))
@@ -156,7 +159,7 @@ private fun MemoryCard(face: Face, up: Boolean, matched: Boolean, modifier: Modi
         contentAlignment = Alignment.Center,
     ) {
         if (rotation <= 90f) {
-            Text("❓", fontSize = 34.sp)
+            GameToken("?", Modifier.fillMaxSize().padding(20.dp))
         } else {
             Box(
                 Modifier
@@ -168,7 +171,7 @@ private fun MemoryCard(face: Face, up: Boolean, matched: Boolean, modifier: Modi
                 if (face.image != null) {
                     Image(face.image, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                 } else {
-                    Text(face.emoji, fontSize = 40.sp)
+                    GameToken(face.emoji, Modifier.fillMaxSize().padding(12.dp))
                 }
             }
         }

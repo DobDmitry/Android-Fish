@@ -257,10 +257,13 @@ class Animator(val rig: Rig) {
     fun eyeState(): EyeState = when (action) {
         Action.SLEEP -> EyeState.SLEEP
         Action.HAPPY, Action.WAVE, Action.JUMP -> EyeState.HAPPY
-        else -> {
-            val period = 3.3f + (abs(seed) % 7) * 0.25f
-            if (((t + abs(seed) % 5) % period) < 0.13f) EyeState.BLINK else EyeState.OPEN
-        }
+        else -> if (blinkClosure(t, seed) > 0f) EyeState.BLINK else EyeState.OPEN
+    }
+
+    fun eyelidClosure(): Float = when (eyeState()) {
+        EyeState.OPEN -> 0f
+        EyeState.BLINK -> blinkClosure(t, seed)
+        else -> 1f
     }
 
     /** Насколько открыт рот (0..1), если персонаж ест или говорит. */

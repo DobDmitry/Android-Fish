@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -41,7 +42,7 @@ private val regions = mapOf(
 )
 
 /** A shared paper cutout in every scene and portrait, with subtle breathing and grounded feet. */
-fun DrawScope.drawNpc(npc: Npc, feet: Offset, h: Float, time: Float, facingLeft: Boolean = false, art: NpcArtwork): Rect {
+fun DrawScope.drawNpc(npc: Npc, feet: Offset, h: Float, time: Float, facingLeft: Boolean = false, art: NpcArtwork, greeting: Boolean = false): Rect {
     val image = if (npc == Npc.OWL) art.owl else art.sheet
     val region = regions[npc]
     val x = region?.left?.times(image.width / 1536f)?.roundToInt() ?: 0
@@ -51,10 +52,13 @@ fun DrawScope.drawNpc(npc: Npc, feet: Offset, h: Float, time: Float, facingLeft:
     val height = h * (1f + sin(time * 2f + npc.ordinal) * .012f)
     val width = height * sw / sh
     drawOval(Color(0xFF514738).copy(alpha = .15f), Offset(feet.x-width*.28f,feet.y-h*.025f), Size(width*.56f,h*.05f))
+    val nod = if (greeting && time < 1.2f) sin(time * 3.14159f / .6f) * 4f * (1f-time/1.2f) else 0f
+    rotate(sin(time * .8f + npc.ordinal) * .8f + nod, pivot = feet) {
     scale(if (facingLeft) -1f else 1f, 1f, pivot=feet) {
         drawImage(image, srcOffset=IntOffset(x,y), srcSize=IntSize(sw,sh),
             dstOffset=IntOffset((feet.x-width/2).roundToInt(),(feet.y-height).roundToInt()),
             dstSize=IntSize(width.roundToInt().coerceAtLeast(1),height.roundToInt().coerceAtLeast(1)), filterQuality=FilterQuality.High)
+    }
     }
     return Rect(feet.x-width/2,feet.y-height,feet.x+width/2,feet.y)
 }
