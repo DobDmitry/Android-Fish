@@ -106,4 +106,7 @@ APK собирается в GitHub Actions на каждый пуш:
 - `ui/npc` — NPC (нарисованы кодом) и диалоги
 - `ui/games` — мини-игры
 
+Иконка приложения — бумажная каляка из Canva (`docs/app-icon-source.webp`),
+слой адаптивной иконки лежит в `mipmap-*/ic_launcher_foreground.webp`.
+
 Kotlin + Jetpack Compose, без сторонних библиотек.
