@@ -28,8 +28,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.unit.IntOffset
@@ -64,6 +66,8 @@ private const val TOW_TIME = 5f
 private const val DOUBLE_TIME = 10f
 private const val PLAYER_Y = 0.74f
 private const val PIF = PI.toFloat()
+/** Длина одной реки в высотах экрана: 10 м на экран, значит 200 м. */
+private const val SEGMENT = 20f
 
 private val Ink = GameInk
 
@@ -73,14 +77,14 @@ private enum class Kind(val pickup: Boolean) {
 }
 
 /** Предмет на реке. [y] — экранная координата, всё плывёт сверху вниз. */
-private class Thing(val kind: Kind, val lane: Int, var y: Float) {
+private class Thing(val kind: Kind, val lane: Int, var y: Float, val river: River) {
     /** Своя x — только у звёздочек, которых тянет магнит. */
     var x = Float.NaN
     /** Звёздочка собрана или препятствие уже задето. */
     var done = false
 }
 
-/** Оформление реки — на каждый заплыв выбирается случайно. */
+/** Оформление реки: меняется случайно каждые [SEGMENT] высот экрана (200 м). */
 private enum class River(
     val title: String,
     val bank: Color,
@@ -90,11 +94,11 @@ private enum class River(
     val waterLight: Color,
     val ripple: Color,
 ) {
-    FOREST("Лесная речка", Color(0xFF8FAF6E), Color(0xFF6E8F55), Color(0xFFE9D6AE), Color(0xFF6FA9B5), Color(0xFF9CC7CC), Color(0xFFFFF5E2)),
-    WINTER("Зимняя речка", Color(0xFFF4F1EA), Color(0xFFD9E2E6), Color(0xFFCADDE3), Color(0xFF6E98B4), Color(0xFF9DBFD2), Color.White),
-    JUNGLE("Река в джунглях", Color(0xFF6F9A5C), Color(0xFF53784A), Color(0xFFE3C99A), Color(0xFF5FA39A), Color(0xFF8CC2B5), Color(0xFFFFF5E2)),
-    MARS("Марсианский канал", Color(0xFFD08A62), Color(0xFFB56E4A), Color(0xFFEDBE94), Color(0xFF8F86C4), Color(0xFFB3ACDC), Color(0xFFF1ECFF)),
-    MILK("Молочная река", Color(0xFFE8A6B8), Color(0xFFD58CA2), Color(0xFFF6D3DC), Color(0xFFEDE4D3), Color(0xFFFBF6EC), Color(0xFFB5A58C)),
+    FOREST("Лесная речка", Color(0xFF76C055), Color(0xFF4E9F3A), Color(0xFFE8D29B), Color(0xFF2C9DB6), Color(0xFF4CBCD0), Color.White),
+    WINTER("Зимняя речка", Color(0xFFF2F8FF), Color(0xFFCFE2F3), Color(0xFFBFE3F5), Color(0xFF3F86C2), Color(0xFF66A9DC), Color.White),
+    JUNGLE("Река в джунглях", Color(0xFF3E9E4A), Color(0xFF2D7A37), Color(0xFFE8C98A), Color(0xFF1F9C8C), Color(0xFF45C0AC), Color.White),
+    MARS("Марсианский канал", Color(0xFFD9734A), Color(0xFFB5532F), Color(0xFFF0A070), Color(0xFF6E5FD8), Color(0xFF9184EE), Color(0xFFE6E0FF)),
+    MILK("Молочная река", Color(0xFFF49AC1), Color(0xFFE07AA8), Color(0xFFFFD1E3), Color(0xFFEDE6D8), Color(0xFFFFFDF7), Color(0xFFB8AC98)),
 }
 
 private class SwimState {
@@ -121,6 +125,19 @@ private class SwimState {
     var spinT = 0f
     val things = mutableListOf<Thing>()
     val particles = mutableListOf<Particle>()
+    /** Река, в которую уже заплыл персонаж, и таймер её названия на экране. */
+    var shownSegment = 0
+    var bannerT = 0f
+    private val rivers = mutableListOf(River.entries.random())
+
+    /** Реки идут друг за другом, каждая следующая — случайная и не такая, как предыдущая. */
+    fun riverAt(k: Int): River {
+        while (rivers.size <= k) rivers += River.entries.filter { it != rivers.last() }.random()
+        return rivers[k.coerceAtLeast(0)]
+    }
+
+    /** Номер реки в точке экрана [y]: дальше по течению — больше. */
+    fun segmentAt(y: Float, h: Float) = floor((dist - y + h) / (h * SEGMENT)).toInt()
 }
 
 private fun laneX(w: Float, lane: Float) = w * (0.5f + (lane - 1f) * 0.25f)
@@ -141,7 +158,6 @@ private fun hash(n: Int): Float {
 fun SwimGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) -> Unit) {
     val finish by rememberUpdatedState(onFinish)
     val st = remember { SwimState() }
-    val river = remember { River.entries.random() }
     val art = rememberStoryArtwork()
     var time by remember { mutableFloatStateOf(0f) }
     var hudStars by remember { mutableIntStateOf(0) }
@@ -205,15 +221,19 @@ fun SwimGame(sprite: CreatureSprite?, outfit: List<WornItem>, onFinish: (Int) ->
             val t = time
             val w = size.width
             val h = size.height
-            drawRiver(river, st.dist, t)
-            for (o in st.things) if (o.kind != Kind.BRIDGE) drawThing(art, river, o, t)
+            drawRivers(st, t)
+            for (o in st.things) if (o.kind != Kind.BRIDGE) drawThing(art, o.river, o, t)
             val diving = st.diveT >= 0f
             if (diving) drawSwimmer(st, sprite, outfit, t)
-            for (o in st.things) if (o.kind == Kind.BRIDGE) drawThing(art, river, o, t)
+            for (o in st.things) if (o.kind == Kind.BRIDGE) drawThing(art, o.river, o, t)
             if (!diving) drawSwimmer(st, sprite, outfit, t)
             drawParticles(st.particles)
             drawBonusBar(st)
+            if (st.bannerT > 0f) {
+                drawLabel(st.riverAt(st.shownSegment).title, Offset(w / 2, h * 0.3f), w * 0.08f, Color(0xFF2F6F80), alpha = st.bannerT.coerceAtMost(1f))
+            }
             if (!st.started) {
+                val river = st.riverAt(0)
                 drawRect(GamePaper.copy(alpha = 0.5f))
                 drawLabel(river.title, Offset(w / 2, h * 0.34f), w * 0.08f, Color(0xFF4F7F8C))
                 drawLabel("← →  сменить дорожку", Offset(w / 2, h * 0.44f), w * 0.052f)
@@ -270,6 +290,13 @@ private fun SwimState.update(dt: Float, w: Float, h: Float) {
     }
     spawnIn -= speed * dt
     if (spawnIn <= 0f) spawn(h)
+    bannerT -= dt
+    val seg = segmentAt(py, h)
+    if (seg > shownSegment) {
+        shownSegment = seg
+        bannerT = 2.5f
+        Sounds.play(Sfx.MAGIC, volume = 0.6f)
+    }
 
     val jumping = jumpT >= 0f
     val diving = diveT >= 0f
@@ -355,7 +382,7 @@ private fun SwimState.spawn(h: Float) {
     val d = (runT / 90f).coerceAtMost(1f)
     val y0 = -h * 0.3f
     val sp = h * 0.075f
-    fun put(kind: Kind, lane: Int, y: Float) { things += Thing(kind, lane, y) }
+    fun put(kind: Kind, lane: Int, y: Float) { things += Thing(kind, lane, y, riverAt(segmentAt(y, h))) }
     fun stars(lane: Int, from: Float, n: Int) { for (i in 0 until n) put(Kind.STAR, lane, from - i * sp) }
     fun others(lane: Int) = (0..2).filter { it != lane }
     val length: Float
@@ -426,12 +453,38 @@ private fun SwimState.spawn(h: Float) {
 
 // ---------- рисование ----------
 
+/** Река на экране; на стыке двух рек — шов рваной бумаги. */
+private fun DrawScope.drawRivers(st: SwimState, t: Float) {
+    val w = size.width
+    val h = size.height
+    val top = st.segmentAt(0f, h)
+    if (top == st.segmentAt(h, h)) {
+        drawRiver(st.riverAt(top), st.dist, t)
+        return
+    }
+    val yb = st.dist + h - top * h * SEGMENT
+    val seam = List(25) { i -> Offset(w * (24 - i) / 24f, yb + (hash(i + top * 31) - 0.5f) * h * 0.014f) }
+    clipRect(top = yb - h * 0.01f) { drawRiver(st.riverAt(top - 1), st.dist, t) }
+    val upper = Path().apply {
+        moveTo(0f, -1f); lineTo(w, -1f)
+        seam.forEach { lineTo(it.x, it.y) }
+        close()
+    }
+    clipPath(upper) { drawRiver(st.riverAt(top), st.dist, t) }
+    val line = Path().apply {
+        moveTo(seam[0].x, seam[0].y)
+        seam.drop(1).forEach { lineTo(it.x, it.y) }
+    }
+    translate(0f, h * 0.004f) { drawPath(line, Color.Black.copy(alpha = 0.18f), style = Stroke(w * 0.012f)) }
+    drawPath(line, Color(0xFFFFF9EC), style = Stroke(w * 0.006f))
+}
+
 private fun DrawScope.drawRiver(r: River, dist: Float, t: Float) {
     val w = size.width
     val h = size.height
     drawRect(r.bank)
-    val l0 = w * 0.11f
-    val r0 = w * 0.89f
+    val l0 = w * 0.13f
+    val r0 = w * 0.87f
     // берега извилистые, изгибы привязаны к пройденному пути
     fun edge(y: Float, side: Int): Float {
         val wy = (y - dist) / h
@@ -479,7 +532,7 @@ private fun DrawScope.drawRiver(r: River, dist: Float, t: Float) {
         if (hash(m * 3 + 11) < 0.55f) continue
         val y = dist - m * ws
         val side = if (hash(m * 7 + 5) > 0.5f) 1 else -1
-        drawWaterDecor(r, Offset(edge(y, side) - side * w * 0.045f, y), w * 0.03f, m, t)
+        drawWaterDecor(r, Offset(edge(y, side) - side * w * 0.045f, y), w * 0.034f, m, t)
     }
     // деревья, сугробы, кратеры на берегах
     val bs = h * 0.1f
@@ -487,9 +540,9 @@ private fun DrawScope.drawRiver(r: River, dist: Float, t: Float) {
         val y = dist - m * bs
         for (side in listOf(-1, 1)) {
             if (hash(m * 2 + (side + 1) * 31 + 7) > 0.8f) continue
-            val x = (if (side < 0) w * 0.05f else w * 0.95f) + (hash(m * 5 + side * 3) - 0.5f) * w * 0.03f
+            val x = (if (side < 0) w * 0.06f else w * 0.94f) + (hash(m * 5 + side * 3) - 0.5f) * w * 0.03f
             val kind = (hash(m * 13 + side) * 3f).toInt().coerceAtMost(2)
-            drawBankDecor(r, kind, Offset(x, y), w * 0.045f, m * 2 + side)
+            drawBankDecor(r, kind, Offset(x, y), w * 0.058f, m * 2 + side)
         }
     }
     // бумажное зерно, плывёт вместе с рекой
@@ -504,23 +557,23 @@ private fun DrawScope.drawBankDecor(r: River, kind: Int, c: Offset, s: Float, se
         River.FOREST -> when (kind) {
             0 -> {
                 drawCircle(r.bankDark, s * 1.15f, c)
-                drawCircle(Color(0xFF9DB97A), s * 0.8f, c + Offset(-s * 0.2f, -s * 0.2f))
+                drawCircle(Color(0xFF5DB547), s * 0.8f, c + Offset(-s * 0.2f, -s * 0.2f))
                 drawCircle(Color.White.copy(alpha = 0.18f), s * 0.3f, c + Offset(-s * 0.4f, -s * 0.45f))
             }
-            1 -> for (i in 0..2) drawCircle(Color(0xFF7C9A5E), s * 0.5f, c + Offset((i - 1) * s * 0.55f, (i % 2) * s * 0.3f))
+            1 -> for (i in 0..2) drawCircle(Color(0xFF3F8F35), s * 0.5f, c + Offset((i - 1) * s * 0.55f, (i % 2) * s * 0.3f))
             else -> {
                 for (i in 0..4) {
                     val a = i * 1.2566f
                     drawCircle(Color.White, s * 0.2f, c + Offset(cos(a) * s * 0.3f, sin(a) * s * 0.3f))
                 }
-                drawCircle(Color(0xFFE0B45C), s * 0.18f, c)
+                drawCircle(Color(0xFFFFD84D), s * 0.18f, c)
             }
         }
         River.WINTER -> when (kind) {
             0 -> {
-                drawCircle(Color(0xFF4E7560), s * 1.1f, c)
-                drawCircle(Color(0xFF628A70), s * 0.75f, c)
-                drawCircle(Color(0xFF7A9E82), s * 0.4f, c)
+                drawCircle(Color(0xFF2E6B4A), s * 1.1f, c)
+                drawCircle(Color(0xFF3E8A5E), s * 0.75f, c)
+                drawCircle(Color(0xFF4FA372), s * 0.4f, c)
                 for (i in 0..5) {
                     val a = i * 1.047f + 0.3f
                     drawCircle(Color.White, s * 0.14f, c + Offset(cos(a) * s * 0.85f, sin(a) * s * 0.85f))
@@ -528,13 +581,13 @@ private fun DrawScope.drawBankDecor(r: River, kind: Int, c: Offset, s: Float, se
             }
             1 -> {
                 drawCircle(Color.White, s * 0.8f, c)
-                drawCircle(Color(0xFFC4D3DA), s * 0.8f, c, style = Stroke(s * 0.08f))
+                drawCircle(Color(0xFFB5D3EA), s * 0.8f, c, style = Stroke(s * 0.08f))
                 val head = c + Offset(0f, -s * 0.9f)
                 drawCircle(Color.White, s * 0.5f, head)
-                drawCircle(Color(0xFFC4D3DA), s * 0.5f, head, style = Stroke(s * 0.08f))
+                drawCircle(Color(0xFFB5D3EA), s * 0.5f, head, style = Stroke(s * 0.08f))
                 drawCircle(Ink, s * 0.07f, head + Offset(-s * 0.18f, -s * 0.1f))
                 drawCircle(Ink, s * 0.07f, head + Offset(s * 0.18f, -s * 0.1f))
-                drawCircle(Color(0xFFE09A6A), s * 0.1f, head + Offset(0f, s * 0.1f))
+                drawCircle(Color(0xFFFF9A3C), s * 0.1f, head + Offset(0f, s * 0.1f))
             }
             else -> {
                 drawOval(Color(0xFFD6E6F4), Offset(c.x - s, c.y - s * 0.5f), Size(s * 2f, s))
@@ -544,27 +597,27 @@ private fun DrawScope.drawBankDecor(r: River, kind: Int, c: Offset, s: Float, se
         River.JUNGLE -> when (kind) {
             0 -> {
                 for (i in 0..6) rotate(i * 51.4f + seed * 13f, pivot = c) {
-                    drawOval(Color(0xFF5E8A4E), Offset(c.x - s * 0.25f, c.y - s * 1.3f), Size(s * 0.5f, s * 1.1f))
+                    drawOval(Color(0xFF2F8F3A), Offset(c.x - s * 0.25f, c.y - s * 1.3f), Size(s * 0.5f, s * 1.1f))
                 }
-                drawCircle(Color(0xFF9C7350), s * 0.25f, c)
+                drawCircle(Color(0xFF8B5A2B), s * 0.25f, c)
             }
             1 -> {
                 for (i in 0..4) {
                     val a = i * 1.2566f
-                    drawCircle(Color(0xFFE3A0A8), s * 0.32f, c + Offset(cos(a) * s * 0.4f, sin(a) * s * 0.4f))
+                    drawCircle(Color(0xFFFF6FA8), s * 0.32f, c + Offset(cos(a) * s * 0.4f, sin(a) * s * 0.4f))
                 }
-                drawCircle(Color(0xFFE0B45C), s * 0.25f, c)
+                drawCircle(Color(0xFFFFD84D), s * 0.25f, c)
             }
             else -> rotate(seed * 37f, pivot = c) {
-                drawOval(Color(0xFF496E42), Offset(c.x - s * 0.45f, c.y - s), Size(s * 0.9f, s * 2f))
-                drawLine(Color(0xFF7FA371), c + Offset(0f, -s), c + Offset(0f, s), s * 0.08f)
+                drawOval(Color(0xFF256B30), Offset(c.x - s * 0.45f, c.y - s), Size(s * 0.9f, s * 2f))
+                drawLine(Color(0xFF4FA35A), c + Offset(0f, -s), c + Offset(0f, s), s * 0.08f)
             }
         }
         River.MARS -> when (kind) {
             0 -> {
                 drawCircle(r.bankDark, s, c)
-                drawCircle(Color(0xFFEDBE94), s, c, style = Stroke(s * 0.2f))
-                drawCircle(Color(0xFF9A5A3C), s * 0.5f, c + Offset(s * 0.15f, s * 0.15f))
+                drawCircle(Color(0xFFF0A070), s, c, style = Stroke(s * 0.2f))
+                drawCircle(Color(0xFF9E4526), s * 0.5f, c + Offset(s * 0.15f, s * 0.15f))
             }
             1 -> for (i in 0..2) {
                 val cc = c + Offset((i - 1) * s * 0.5f, (i % 2) * s * 0.3f)
@@ -573,29 +626,29 @@ private fun DrawScope.drawBankDecor(r: River, kind: Int, c: Offset, s: Float, se
                     moveTo(cc.x, cc.y - s * k); lineTo(cc.x + s * 0.3f, cc.y)
                     lineTo(cc.x, cc.y + s * k * 0.6f); lineTo(cc.x - s * 0.3f, cc.y); close()
                 }
-                drawPath(p, Color(0xFF9FCFD4))
+                drawPath(p, Color(0xFF7FE3F0))
                 drawPath(p, Ink, style = Stroke(s * 0.08f))
             }
-            else -> for (i in 0..2) drawCircle(Color(0xFFA4603F), s * (0.25f + 0.1f * i), c + Offset((i - 1) * s * 0.6f, (i % 2) * s * 0.4f))
+            else -> for (i in 0..2) drawCircle(Color(0xFFA8492A), s * (0.25f + 0.1f * i), c + Offset((i - 1) * s * 0.6f, (i % 2) * s * 0.4f))
         }
         River.MILK -> when (kind) {
             0 -> {
                 drawLine(Color.White, c, c + Offset(s * 0.5f, s * 1.1f), s * 0.18f, StrokeCap.Round)
-                drawCircle(Color(0xFFE3A0A8), s * 0.75f, c)
+                drawCircle(Color(0xFFFF6FA8), s * 0.75f, c)
                 for (i in 0..2) {
                     val rr = s * (0.2f + i * 0.18f)
                     drawArc(Color.White, i * 120f, 200f, false, Offset(c.x - rr, c.y - rr), Size(rr * 2, rr * 2), style = Stroke(s * 0.12f))
                 }
             }
             1 -> {
-                val col = listOf(Color(0xFF9CB9BF), Color(0xFFE0B45C), Color(0xFFA8B88B))[abs(seed) % 3]
+                val col = listOf(Color(0xFF7EC8F0), Color(0xFFFFD84D), Color(0xFF5ED6A8))[abs(seed) % 3]
                 drawPath(Path().apply { moveTo(c.x - s * 0.5f, c.y); lineTo(c.x - s * 1.05f, c.y - s * 0.4f); lineTo(c.x - s * 1.05f, c.y + s * 0.4f); close() }, col)
                 drawPath(Path().apply { moveTo(c.x + s * 0.5f, c.y); lineTo(c.x + s * 1.05f, c.y - s * 0.4f); lineTo(c.x + s * 1.05f, c.y + s * 0.4f); close() }, col)
                 drawCircle(col, s * 0.55f, c)
                 drawCircle(Color.White.copy(alpha = 0.5f), s * 0.15f, c + Offset(-s * 0.2f, -s * 0.2f))
             }
             else -> {
-                val cols = listOf(Color(0xFFFFFFFF), Color(0xFFE0B45C), Color(0xFF9CB9BF), Color(0xFFA8B88B), Color(0xFFD98B72))
+                val cols = listOf(Color(0xFFFFFFFF), Color(0xFFFFD84D), Color(0xFF7EC8F0), Color(0xFF5ED6A8), Color(0xFFFF7A59))
                 for (i in 0..5) {
                     val a = hash(seed * 11 + i) * 6.28f
                     val p = c + Offset(cos(a) * s * 0.8f * hash(seed + i * 3), sin(a) * s * 0.8f * hash(seed * 7 + i))
@@ -609,18 +662,18 @@ private fun DrawScope.drawBankDecor(r: River, kind: Int, c: Offset, s: Float, se
 private fun DrawScope.drawWaterDecor(r: River, c: Offset, s: Float, seed: Int, t: Float) {
     when (r) {
         River.FOREST, River.JUNGLE -> {
-            drawArc(Color(0xFF8DAA6C), 20f + seed * 47f, 320f, true, Offset(c.x - s, c.y - s), Size(s * 2, s * 2))
-            if (r == River.JUNGLE) drawCircle(Color(0xFFE3A0A8), s * 0.35f, c + Offset(s * 0.2f, -s * 0.1f))
+            drawArc(Color(0xFF5FB04A), 20f + seed * 47f, 320f, true, Offset(c.x - s, c.y - s), Size(s * 2, s * 2))
+            if (r == River.JUNGLE) drawCircle(Color(0xFFFF6FA8), s * 0.35f, c + Offset(s * 0.2f, -s * 0.1f))
         }
         River.WINTER -> {
-            drawCircle(Color(0xFFEFF5F6), s * 0.8f, c)
-            drawCircle(Color(0xFFB7CDD6), s * 0.8f, c, style = Stroke(s * 0.12f))
+            drawCircle(Color(0xFFE8F6FF), s * 0.8f, c)
+            drawCircle(Color(0xFFB5DDF2), s * 0.8f, c, style = Stroke(s * 0.12f))
         }
         River.MARS -> for (i in 0..2) {
             val k = (t * 0.6f + i * 0.33f + seed * 0.1f) % 1f
             drawCircle(r.ripple.copy(alpha = 0.7f * (1f - k)), s * (0.2f + 0.5f * k), c + Offset((i - 1) * s * 0.7f, 0f), style = Stroke(s * 0.1f))
         }
-        River.MILK -> drawCircle(Color(0xFFD9B27A), s * 0.6f, c, style = Stroke(s * 0.35f))
+        River.MILK -> drawCircle(Color(0xFFE2B26A), s * 0.6f, c, style = Stroke(s * 0.35f))
     }
 }
 
@@ -667,7 +720,7 @@ private fun DrawScope.drawRock(art: StoryArtwork, r: River, c: Offset, w: Float,
             drawSprite(art, 9, c, rad * 2.3f)
             if (r == River.JUNGLE) {
                 drawCircle(Color(0xFF7FA35E), rad * 0.28f, c + Offset(rad * 0.3f, -rad * 0.35f))
-                drawCircle(Color(0xFF9DB97A), rad * 0.2f, c + Offset(rad * 0.05f, -rad * 0.5f))
+                drawCircle(Color(0xFF5DB547), rad * 0.2f, c + Offset(rad * 0.05f, -rad * 0.5f))
             }
         }
     }
@@ -699,27 +752,27 @@ private fun DrawScope.drawLog(r: River, c: Offset, w: Float, t: Float) {
     )
     when (r) {
         River.MARS -> { // труба
-            drawRoundRect(Color(0xFFA9B2B6), tl, sz, CornerRadius(lh * 0.3f))
-            for (i in 0..2) drawRect(Color(0xFF7E888D), Offset(tl.x + lw * (0.2f + i * 0.28f), tl.y), Size(lw * 0.06f, lh))
+            drawRoundRect(Color(0xFF9AA6B2), tl, sz, CornerRadius(lh * 0.3f))
+            for (i in 0..2) drawRect(Color(0xFF6F7C89), Offset(tl.x + lw * (0.2f + i * 0.28f), tl.y), Size(lw * 0.06f, lh))
             drawRect(Color.White.copy(alpha = 0.3f), Offset(tl.x, tl.y + lh * 0.15f), Size(lw, lh * 0.15f))
             drawRoundRect(Ink, tl, sz, CornerRadius(lh * 0.3f), style = line)
         }
         River.MILK -> { // шоколадка
-            drawRoundRect(Color(0xFF7E5236), tl, sz, CornerRadius(lh * 0.2f))
-            for (i in 1..3) drawLine(Color(0xFF9A6B4A), Offset(tl.x + lw * i / 4f, tl.y), Offset(tl.x + lw * i / 4f, tl.y + lh), w * 0.006f)
-            drawLine(Color(0xFF9A6B4A), Offset(tl.x, y), Offset(tl.x + lw, y), w * 0.006f)
+            drawRoundRect(Color(0xFF7B4A2A), tl, sz, CornerRadius(lh * 0.2f))
+            for (i in 1..3) drawLine(Color(0xFF9A6440), Offset(tl.x + lw * i / 4f, tl.y), Offset(tl.x + lw * i / 4f, tl.y + lh), w * 0.006f)
+            drawLine(Color(0xFF9A6440), Offset(tl.x, y), Offset(tl.x + lw, y), w * 0.006f)
             drawRoundRect(Ink, tl, sz, CornerRadius(lh * 0.2f), style = line)
         }
         else -> {
-            drawRoundRect(Color(0xFF9C7350), tl, sz, CornerRadius(lh / 2))
+            drawRoundRect(Color(0xFF8B5A2B), tl, sz, CornerRadius(lh / 2))
             for (i in -2..2) {
                 val bx = c.x + i * lw * 0.16f
-                drawLine(Color(0xFF7A563A), Offset(bx - lh * 0.3f, y - lh * 0.15f), Offset(bx + lh * 0.3f, y - lh * 0.15f), w * 0.005f, StrokeCap.Round)
+                drawLine(Color(0xFF6B4120), Offset(bx - lh * 0.3f, y - lh * 0.15f), Offset(bx + lh * 0.3f, y - lh * 0.15f), w * 0.005f, StrokeCap.Round)
             }
             if (r == River.WINTER) drawRoundRect(Color.White, Offset(tl.x + lh * 0.3f, tl.y - lh * 0.1f), Size(lw * 0.7f, lh * 0.45f), CornerRadius(lh * 0.25f))
             drawRoundRect(Ink, tl, sz, CornerRadius(lh / 2), style = line)
             val cut = Offset(tl.x + lw - lh * 0.7f, tl.y + lh * 0.08f)
-            drawOval(Color(0xFFE3C18F), cut, Size(lh * 0.6f, lh * 0.84f))
+            drawOval(Color(0xFFE2B77D), cut, Size(lh * 0.6f, lh * 0.84f))
             drawOval(Ink, cut, Size(lh * 0.6f, lh * 0.84f), style = Stroke(w * 0.005f))
         }
     }
@@ -731,11 +784,11 @@ private fun DrawScope.drawBridge(r: River, c: Offset, w: Float) {
     val tl = Offset(c.x - bw / 2, c.y - bd / 2)
     val corner = CornerRadius(w * 0.01f)
     drawRect(Color.Black.copy(alpha = 0.15f), tl + Offset(w * 0.02f, w * 0.035f), Size(bw, bd))
-    val deck = when (r) { River.MARS -> Color(0xFFA3ABAF); River.MILK -> Color(0xFFE3BE84); else -> Color(0xFFB98E5F) }
-    val seam = when (r) { River.MARS -> Color(0xFF7A8387); River.MILK -> Color(0xFFC59A62); else -> Color(0xFF8A6642) }
+    val deck = when (r) { River.MARS -> Color(0xFF8E9AA6); River.MILK -> Color(0xFFE8B868); else -> Color(0xFFAD7A40) }
+    val seam = when (r) { River.MARS -> Color(0xFF66727E); River.MILK -> Color(0xFFC48F3E); else -> Color(0xFF7A5228) }
     if (r == River.JUNGLE) {
         for (x in listOf(tl.x - w * 0.012f, tl.x + bw + w * 0.012f)) {
-            drawLine(Color(0xFFD6BE90), Offset(x, tl.y - w * 0.01f), Offset(x, tl.y + bd + w * 0.01f), w * 0.008f)
+            drawLine(Color(0xFFD9B77A), Offset(x, tl.y - w * 0.01f), Offset(x, tl.y + bd + w * 0.01f), w * 0.008f)
         }
     }
     drawRoundRect(deck, tl, Size(bw, bd), corner)
@@ -743,7 +796,7 @@ private fun DrawScope.drawBridge(r: River, c: Offset, w: Float) {
     if (r == River.MILK) for (i in 1..4) drawLine(seam, Offset(tl.x + bw * i / 5f, tl.y), Offset(tl.x + bw * i / 5f, tl.y + bd), w * 0.005f)
     if (r == River.WINTER) drawRoundRect(Color.White, tl, Size(bw, bd * 0.3f), corner)
     drawRoundRect(Ink, tl, Size(bw, bd), corner, style = Stroke(w * 0.007f))
-    val post = if (r == River.MARS) Color(0xFF6A7276) else Color(0xFF6E5038)
+    val post = if (r == River.MARS) Color(0xFF55606B) else Color(0xFF5B3A1A)
     for (px in listOf(tl.x, tl.x + bw)) for (py in listOf(tl.y, tl.y + bd)) {
         drawCircle(post, w * 0.02f, Offset(px, py))
         drawCircle(Ink, w * 0.02f, Offset(px, py), style = Stroke(w * 0.005f))
@@ -752,7 +805,7 @@ private fun DrawScope.drawBridge(r: River, c: Offset, w: Float) {
 
 private fun DrawScope.drawWhirl(r: River, c: Offset, w: Float, t: Float) {
     val rad = w * 0.09f
-    val col = if (r == River.MILK) Color(0xFFB98A55) else Color.White
+    val col = if (r == River.MILK) Color(0xFFC98B3A) else Color.White
     drawCircle(Color(0xFF0A3C5A).copy(alpha = if (r == River.MILK) 0.12f else 0.25f), rad, c)
     for (i in 0..3) {
         val ri = rad * (0.25f + i * 0.24f)
@@ -776,14 +829,14 @@ private fun starPath(c: Offset, r: Float, rotDeg: Float) = Path().apply {
 
 private fun DrawScope.drawStar(c: Offset, r: Float, rotDeg: Float) {
     val p = starPath(c, r, rotDeg)
-    drawPath(p, Color(0xFFE0B45C))
+    drawPath(p, Color(0xFFFFD84D))
     drawPath(p, Ink, style = Stroke(r * 0.14f, join = StrokeJoin.Round))
     drawCircle(Color.White.copy(alpha = 0.6f), r * 0.16f, c + Offset(-r * 0.22f, -r * 0.22f))
 }
 
 private fun DrawScope.drawBonus(k: Kind, c: Offset, r: Float, t: Float) {
     drawCircle(Color.White.copy(alpha = 0.85f), r, c)
-    drawCircle(Color(0xFFA9CBCF), r, c, style = Stroke(r * 0.12f))
+    drawCircle(Color(0xFF7FD3F0), r, c, style = Stroke(r * 0.12f))
     drawBonusIcon(k, c, r * 0.62f, t)
     drawCircle(Color.White, r * 0.15f, c + Offset(-r * 0.5f, -r * 0.5f))
 }
@@ -791,7 +844,7 @@ private fun DrawScope.drawBonus(k: Kind, c: Offset, r: Float, t: Float) {
 private fun DrawScope.drawBonusIcon(k: Kind, c: Offset, s: Float, t: Float) {
     when (k) {
         Kind.MAGNET -> {
-            val red = Color(0xFFD0705A)
+            val red = Color(0xFFE8473C)
             val sw = s * 0.45f
             drawArc(red, 180f, 180f, false, Offset(c.x - s * 0.6f, c.y - s * 0.7f), Size(s * 1.2f, s * 1.2f), style = Stroke(sw))
             for (dx in listOf(-s * 0.6f, s * 0.6f)) {
@@ -800,7 +853,7 @@ private fun DrawScope.drawBonusIcon(k: Kind, c: Offset, s: Float, t: Float) {
             }
         }
         Kind.SHIELD -> {
-            drawCircle(Color(0xFFB9DCE3).copy(alpha = 0.7f), s * 0.75f, c)
+            drawCircle(Color(0xFF9EE4FF).copy(alpha = 0.7f), s * 0.75f, c)
             drawCircle(Color.White, s * 0.75f, c, style = Stroke(s * 0.12f))
             drawArc(Color.White, 200f, 60f, false, Offset(c.x - s * 0.5f, c.y - s * 0.5f), Size(s, s), style = Stroke(s * 0.14f, cap = StrokeCap.Round))
         }
@@ -822,10 +875,10 @@ private fun DrawScope.drawFish(c: Offset, s: Float, t: Float) {
         lineTo(c.x + s * 1.0f, c.y + s * 0.4f + wig)
         close()
     }
-    drawPath(tail, Color(0xFFE09A6A))
+    drawPath(tail, Color(0xFFFF9A3C))
     drawPath(tail, Ink, style = Stroke(s * 0.1f, join = StrokeJoin.Round))
     val tl = Offset(c.x - s * 0.7f, c.y - s * 0.42f)
-    drawOval(Color(0xFFE8B07C), tl, Size(s * 1.3f, s * 0.84f))
+    drawOval(Color(0xFFFFB347), tl, Size(s * 1.3f, s * 0.84f))
     drawOval(Ink, tl, Size(s * 1.3f, s * 0.84f), style = Stroke(s * 0.1f))
     drawCircle(Color.White, s * 0.15f, c + Offset(-s * 0.35f, -s * 0.08f))
     drawCircle(Ink, s * 0.07f, c + Offset(-s * 0.37f, -s * 0.08f))
@@ -868,36 +921,33 @@ private fun DrawScope.drawSwimmer(st: SwimState, sprite: CreatureSprite?, outfit
                     Offset(px + sin(i * 2.1f + t * 4f) * ch * 0.3f, py + ch * 0.2f - k * ch * 0.6f), style = Stroke(w * 0.004f),
                 )
             }
-            drawOval(Color.White.copy(alpha = 0.6f), Offset(px - ch * 0.5f, py - ch * 0.05f), Size(ch, ch * 0.2f), style = Stroke(w * 0.006f))
         }
         else -> {
-            val wake = Color.White.copy(alpha = 0.55f)
-            drawLine(wake, Offset(px - ch * 0.3f, py + ch * 0.2f), Offset(px - ch * 0.9f, py + ch * 1.5f), w * 0.006f, StrokeCap.Round)
-            drawLine(wake, Offset(px + ch * 0.3f, py + ch * 0.2f), Offset(px + ch * 0.9f, py + ch * 1.5f), w * 0.006f, StrokeCap.Round)
+            // по пояс в воде: рисунок виден только над линией воды
+            val wl = py + ch * 0.12f
             val feet = Offset(px, py + ch * 0.5f + sin(t * 3f) * ch * 0.02f)
             val act = if (st.hurtT > HURT_TIME - 0.6f) Action.SAD else Action.SWIM
-            if (st.spinT > 0f) {
-                rotate(st.spinT * 720f, pivot) {
-                    drawCreature(sprite, feet, ch, t, outfit = outfit, shadow = false, alpha = a, action = Action.SAD)
-                }
-            } else {
-                // нижняя часть рисунка — под водой
-                val wl = py + ch * 0.12f
-                rotate(tilt, pivot) {
-                    clipRect(bottom = wl) {
-                        drawCreature(sprite, feet, ch, t, outfit = outfit, shadow = false, alpha = a, action = act)
-                    }
-                    clipRect(top = wl) {
-                        drawCreature(sprite, feet, ch, t, outfit = outfit, shadow = false, alpha = 0.3f * a, action = act)
-                    }
+            val turn = if (st.spinT > 0f) st.spinT * 720f else tilt
+            clipRect(bottom = wl) {
+                rotate(turn, pivot) {
+                    drawCreature(sprite, feet, ch, t, outfit = outfit, shadow = false, alpha = a, action = if (st.spinT > 0f) Action.SAD else act)
                 }
             }
-            drawOval(Color.White.copy(alpha = 0.85f), Offset(px - ch * 0.48f, py + ch * 0.04f), Size(ch * 0.96f, ch * 0.18f), style = Stroke(w * 0.007f))
+            // лёгкая рябь вокруг пояса
+            drawOval(Color(0xFF0A3C5A).copy(alpha = 0.12f), Offset(px - ch * 0.42f, wl - ch * 0.03f), Size(ch * 0.84f, ch * 0.14f))
+            for (i in 0..1) {
+                val k = (t * 0.9f + i * 0.5f) % 1f
+                val rw = ch * (0.55f + 0.5f * k)
+                drawArc(
+                    Color.White.copy(alpha = 0.5f * (1f - k)), 15f, 150f, false,
+                    Offset(px - rw / 2, wl - rw * 0.1f), Size(rw, rw * 0.2f), style = Stroke(w * 0.005f, cap = StrokeCap.Round),
+                )
+            }
         }
     }
     if (st.shield) {
         val c = pivot - Offset(0f, ch * 0.05f)
-        drawCircle(Color(0xFFB9DCE3).copy(alpha = 0.3f), ch * 0.75f, c)
+        drawCircle(Color(0xFF9EE4FF).copy(alpha = 0.3f), ch * 0.75f, c)
         drawCircle(Color.White.copy(alpha = 0.8f), ch * 0.75f, c, style = Stroke(w * 0.006f))
         drawArc(
             Color.White, 200f, 60f, false, Offset(c.x - ch * 0.55f, c.y - ch * 0.55f), Size(ch * 1.1f, ch * 1.1f),
@@ -906,7 +956,7 @@ private fun DrawScope.drawSwimmer(st: SwimState, sprite: CreatureSprite?, outfit
     }
     if (st.magnetT > 0f) {
         val k = (t * 1.5f) % 1f
-        drawCircle(Color(0xFFD0705A).copy(alpha = 0.4f * (1f - k)), ch * (0.6f + k * 0.6f), pivot, style = Stroke(w * 0.006f))
+        drawCircle(Color(0xFFE8473C).copy(alpha = 0.4f * (1f - k)), ch * (0.6f + k * 0.6f), pivot, style = Stroke(w * 0.006f))
     }
 }
 
