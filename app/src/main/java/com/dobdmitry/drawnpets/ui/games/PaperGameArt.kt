@@ -68,6 +68,13 @@ internal fun DrawScope.drawGameToken(token: String, c: Offset, edge: Float, rota
             "🎈" -> { drawLine(GameInk,Offset.Zero,Offset(4f,48f),2f);oval(-29f,-43f,58f,70f,GameRose) }
             "🃏", "?" -> { drawRoundRect(cream,Offset(-31f,-41f),Size(62f,82f),CornerRadius(8f));drawRoundRect(GameInk,Offset(-31f,-41f),Size(62f,82f),CornerRadius(8f),style=Stroke(3f));drawGameToken("⭐",Offset.Zero,44f) }
             "🌳" -> { drawLine(GameInk,Offset(0f,40f),Offset(0f,-10f),8f);oval(-37f,-43f,74f,65f,green) }
+            "🌊" -> {
+                val water=Color(0xFF8FB8C0)
+                for(i in 0..2) { val y=i*16f-10f
+                    val p=Path().apply { moveTo(-44f,y+20f); cubicTo(-30f,y-8f,-8f,y-8f,0f,y+8f); cubicTo(8f,y-8f,30f,y-8f,44f,y+20f); close() }
+                    shape(p,if(i==1) Color(0xFFA9CBCF) else water) }
+                drawCircle(cream,5f,Offset(-14f,-24f)); drawCircle(cream,3.5f,Offset(4f,-32f))
+            }
             "🐦" -> { oval(-35f,-17f,65f,43f,Color(0xFF9CB9BF));shape(polygon(listOf(Offset(-12f,3f),Offset(-28f,-36f),Offset(15f,-3f))),cream);shape(polygon(listOf(Offset(27f,-9f),Offset(44f,0f),Offset(28f,8f))),gold);drawCircle(GameInk,3f,Offset(19f,-4f)) }
             else -> { // Orchard fruit: each silhouette and leaf remains recognizable.
                 val pear=token=="🍐"

@@ -63,6 +63,7 @@ fun PlayScreen(vm: GameViewModel, game: MiniGame, creatureId: String?, onExit: (
             MiniGame.BALLOONS -> score / 2 + 1
             MiniGame.HIDE -> score * 3 + 1
             MiniGame.FLY -> score / 2 + 1
+            MiniGame.SWIM -> score / 3 + 2
         }
         val got = vm.finishGame(game.id, score, coins, creatureId)
         val record = score > prevBest && score > 0
@@ -87,6 +88,7 @@ fun PlayScreen(vm: GameViewModel, game: MiniGame, creatureId: String?, onExit: (
                 MiniGame.MEMORY -> MemoryGame(vm, finish)
                 MiniGame.BALLOONS -> BalloonGame(vm, finish)
                 MiniGame.FLY -> FlyGame(sprite, creature?.outfit ?: emptyList(), vm.state.bestScores[game.id] ?: 0, finish)
+                MiniGame.SWIM -> SwimGame(sprite, creature?.outfit ?: emptyList(), finish)
                 MiniGame.HIDE -> HideSeekGame(sprite, creature?.outfit ?: emptyList(), finish)
             }
         }
